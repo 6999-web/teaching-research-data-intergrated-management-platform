@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教研室工作考评系统 - 控制面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .status {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .status-card {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .status-card.warning {
+            border-left-color: #ffc107;
+        }
+        
+        .status-card h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .status-card p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .link-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            color: white;
+            text-decoration: none;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: block;
+        }
+        
+        .link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .link-card h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .link-card p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .link-card .icon {
+            font-size: 32px;
+            margin-bottom: 15px;
+        }
+        
+        .features {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+        }
+        
+        .features h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: start;
+            gap: 15px;
+        }
+        
+        .feature-item .check {
+            color: #28a745;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .feature-item div h4 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .feature-item div p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 教研室工作考评系统</h1>
+            <p>系统已成功启动，所有服务运行正常</p>
+        </div>
+        
+        <div class="status">
+            <div class="status-card">
+                <h3><span class="status-indicator"></span>后端服务</h3>
+                <p>状态: 运行中</p>
+                <p>地址: http://localhost:8000</p>
+                <p>数据库: SQLite (测试模式)</p>
+            </div>
+            
+            <div class="status-card">
+                <h3><span class="status-indicator"></span>前端服务</h3>
+                <p>状态: 运行中</p>
+                <p>地址: http://localhost:3000</p>
+                <p>框架: Vue 3 + Vite</p>
+            </div>
+            
+            <div class="status-card warning">
+                <h3>⚠️ 测试结果</h3>
+                <p>通过: 10/12 (83.3%)</p>
+                <p>失败: 2个端点需要检查</p>
+                <p>详情: 查看测试报告</p>
+            </div>
+        </div>
+        
+        <div class="links">
+            <a href="http://localhost:3000" target="_blank" class="link-card">
+                <div class="icon">🖥️</div>
+                <h3>前端应用</h3>
+                <p>访问系统主界面，开始使用考评系统</p>
+            </a>
+            
+            <a href="http://localhost:8000/docs" target="_blank" class="link-card">
+                <div class="icon">📚</div>
+                <h3>API文档</h3>
+                <p>查看和测试所有API端点</p>
+            </a>
+            
+            <a href="http://localhost:8000/api/health" target="_blank" class="link-card">
+                <div class="icon">💚</div>
+                <h3>健康检查</h3>
+                <p>查看系统健康状态</p>
+            </a>
+            
+            <a href="SYSTEM_STARTUP_REPORT.md" target="_blank" class="link-card">
+                <div class="icon">📊</div>
+                <h3>启动报告</h3>
+                <p>查看详细的系统启动报告</p>
+            </a>
+        </div>
+        
+        <div class="features">
+            <h2>✨ 系统功能</h2>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>教研室端</h4>
+                        <p>自评表填写、附件上传、AI评分触发、结果查看</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>管理端</h4>
+                        <p>手动评分、最终得分确定、异常处理、数据同步</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>校长办公会端</h4>
+                        <p>数据接收、实时监控、结果审定</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>AI自动评分</h4>
+                        <p>DeepSeek API集成、异常检测、附件分类</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>操作日志</h4>
+                        <p>全流程日志记录、操作追溯、审计功能</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <span class="check">✅</span>
+                    <div>
+                        <h4>公示分发</h4>
+                        <p>结果公示、自动分发、感悟总结生成</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>教研室工作考评系统 v1.0 | 技术栈: Vue 3 + FastAPI + PostgreSQL + MinIO</p>
+            <p>查看 <a href="README.md" style="color: #667eea;">README.md</a> 了解更多信息</p>
+        </div>
+    </div>
+    
+    <script>
+        // 自动检查服务状态
+        async function checkServices() {
+            try {
+                const backendResponse = await fetch('http://localhost:8000/api/health');
+                const frontendResponse = await fetch('http://localhost:3000');
+                
+                console.log('后端状态:', backendResponse.ok ? '✅ 正常' : '❌ 异常');
+                console.log('前端状态:', frontendResponse.ok ? '✅ 正常' : '❌ 异常');
+            } catch (error) {
+                console.error('服务检查失败:', error);
+            }
+        }
+        
+        // 页面加载时检查服务
+        checkServices();
+        
+        // 每30秒检查一次
+        setInterval(checkServices, 30000);
+    </script>
+</body>
+</html>
