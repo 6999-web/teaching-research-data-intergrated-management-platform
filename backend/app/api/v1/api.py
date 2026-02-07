@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, self_evaluation, attachments, scoring, review, president_office, publication, insight, logs, chunked_upload
+from app.api.v1.endpoints import auth, self_evaluation, attachments, scoring, review, president_office, publication, insight, logs, chunked_upload, improvement, college
 
 api_router = APIRouter()
 
@@ -36,3 +36,9 @@ api_router.include_router(insight.router, prefix="/insight", tags=["insight"])
 
 # Include operation logs routes
 api_router.include_router(logs.router, prefix="/logs", tags=["logs"])
+
+# Include improvement plan routes
+api_router.include_router(improvement.router, prefix="/improvements", tags=["improvements"])
+
+# Include college dashboard routes
+api_router.include_router(college.router, prefix="/college", tags=["college"])

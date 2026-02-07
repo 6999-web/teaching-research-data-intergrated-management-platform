@@ -29,6 +29,8 @@ class SelfEvaluation(Base):
     manual_scores = relationship("ManualScore", back_populates="evaluation", cascade="all, delete-orphan")
     final_score = relationship("FinalScore", back_populates="evaluation", uselist=False, cascade="all, delete-orphan")
     insight_summary = relationship("InsightSummary", back_populates="evaluation", uselist=False, cascade="all, delete-orphan")
+    improvement_plans = relationship("ImprovementPlan", back_populates="evaluation", cascade="all, delete-orphan")
+    improvement_plans = relationship("ImprovementPlan", back_populates="evaluation", cascade="all, delete-orphan")
 
     __table_args__ = (
         {"schema": None},

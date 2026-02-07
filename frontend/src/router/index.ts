@@ -62,6 +62,16 @@ const router = createRouter({
       path: '/attachment-management',
       name: 'attachment-management',
       component: () => import('@/views/AttachmentManagement.vue')
+    },
+    {
+      path: '/college-dashboard',
+      name: 'college-dashboard',
+      component: () => import('@/views/CollegeDashboard.vue')
+    },
+    {
+      path: '/improvement-plan/:id',
+      name: 'improvement-plan',
+      component: () => import('@/views/ImprovementPlan.vue')
     }
   ]
 })

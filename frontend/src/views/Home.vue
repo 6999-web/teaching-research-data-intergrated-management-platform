@@ -1,10 +1,19 @@
 <template>
-  <div class="platform-layout">
+  <div class="platform-layout" :class="`role-${authStore.userRole}`">
     <!-- 左侧导航栏 -->
     <div class="sidebar">
       <div class="sidebar-header" @click="goToHome">
         <img src="/school-logo.jpg" alt="校徽" class="sidebar-logo" />
         <h2 class="sidebar-title">教研室数据管理平台</h2>
+        <div class="role-badge">{{ isRoleMode ? authStore.roleName : modules[activeModule]?.name }}</div>
+      </div>
+      
+      <!-- 模式切换按钮 -->
+      <div class="mode-toggle">
+        <button @click="toggleMode" class="toggle-button">
+          <el-icon><Switch /></el-icon>
+          <span>{{ isRoleMode ? '切换到三端模式' : '切换到四角色模式' }}</span>
+        </button>
       </div>
       
       <div class="sidebar-menu">
@@ -25,7 +34,10 @@
       <div class="sidebar-footer">
         <div class="user-info">
           <el-icon class="user-avatar"><User /></el-icon>
-          <span class="user-name">admin</span>
+          <div class="user-details">
+            <span class="user-name">{{ authStore.userName }}</span>
+            <span class="user-role-text">{{ isRoleMode ? authStore.roleName : '管理员' }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -50,6 +62,9 @@
 
       <!-- 内容区域 -->
       <div class="content-area">
+        <!-- 流程条 (仅在四角色模式下显示) -->
+        <ProcessBar v-if="isRoleMode" :user-role="authStore.userRole" :current-step="3" />
+        
         <div class="content-header">
           <h2 class="content-title">{{ currentTabs[activeTab]?.name }}</h2>
           <p class="content-subtitle">{{ currentTabs[activeTab]?.description }}</p>
@@ -91,8 +106,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import ProcessBar from '@/components/ProcessBar.vue'
 import { 
   User,
   Edit,
@@ -111,23 +128,65 @@ import {
   CircleCheck,
   ArrowRight,
   Document,
-  TrendCharts
+  TrendCharts,
+  Histogram,
+  PieChart,
+  Switch
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
-// 三个端口模块
-const modules = ref([
+// 模式切换：false=三端模式，true=四角色模式
+const isRoleMode = ref(false)
+
+// 三端模块（原来的）
+const threePortModules = ref([
   { name: '教研室端', icon: Edit },
   { name: '管理端', icon: Setting },
   { name: '校长办公会端', icon: Monitor }
 ])
 
+// 四个角色模块（新的）
+const fourRoleModules = ref([
+  { name: '普通教师', icon: User, role: 'teacher' },
+  { name: '教研室负责人', icon: Edit, role: 'director' },
+  { name: '二级学院负责人', icon: Histogram, role: 'college_leader' },
+  { name: '学校教务处负责人', icon: Setting, role: 'academic_affairs' }
+])
+
+// 当前使用的模块
+const modules = computed(() => {
+  return isRoleMode.value ? fourRoleModules.value : threePortModules.value
+})
+
 const activeModule = ref(0)
 const activeTab = ref(0)
 
-// 每个模块的标签页
-const moduleTabs = ref([
+// 切换模式
+const toggleMode = () => {
+  isRoleMode.value = !isRoleMode.value
+  activeModule.value = 0
+  activeTab.value = 0
+  localStorage.setItem('viewMode', isRoleMode.value ? 'role' : 'port')
+}
+
+onMounted(() => {
+  authStore.loadFromStorage()
+  // 恢复模式设置
+  const savedMode = localStorage.getItem('viewMode')
+  if (savedMode === 'role') {
+    isRoleMode.value = true
+    // 根据存储的角色设置activeModule
+    const roleIndex = fourRoleModules.value.findIndex(m => m.role === authStore.userRole)
+    if (roleIndex !== -1) {
+      activeModule.value = roleIndex
+    }
+  }
+})
+
+// 三端模式的标签页（原来的）
+const threePortTabs = ref([
   // 教研室端
   [
     { name: '详教方案', icon: Document, description: '查看和管理教学方案' },
@@ -146,8 +205,41 @@ const moduleTabs = ref([
   ]
 ])
 
-// 每个模块的功能列表
-const moduleFunctions = ref([
+// 四角色模式的标签页（新的）
+const fourRoleTabs = ref([
+  // 普通教师
+  [
+    { name: '我的教研室', icon: Document, description: '查看本教研室考评结果' },
+    { name: '数据分析', icon: DataAnalysis, description: '历史对比和指标分析' }
+  ],
+  // 教研室负责人
+  [
+    { name: '自评管理', icon: EditPen, description: '填写和管理自评表' },
+    { name: '材料管理', icon: Upload, description: '上传和管理附件' },
+    { name: 'AI评分', icon: Monitor, description: '触发AI评分' },
+    { name: '改进闭环', icon: CircleCheck, description: '提交改进措施' }
+  ],
+  // 二级学院负责人
+  [
+    { name: '学院驾驶舱', icon: TrendCharts, description: '全院概览和对比' },
+    { name: '整改督导', icon: Checked, description: '审核改进措施' }
+  ],
+  // 学校教务处负责人
+  [
+    { name: '监控中心', icon: Monitor, description: '全校数据监控' },
+    { name: '评分管理', icon: Medal, description: '手动评分和最终得分' },
+    { name: '异常处理', icon: Warning, description: '处理异常数据' },
+    { name: '公示管理', icon: Promotion, description: '发起公示' }
+  ]
+])
+
+// 当前使用的标签页
+const moduleTabs = computed(() => {
+  return isRoleMode.value ? fourRoleTabs.value : threePortTabs.value
+})
+
+// 三端模式的功能列表（原来的）
+const threePortFunctions = ref([
   // 教研室端功能
   [
     [
@@ -188,6 +280,81 @@ const moduleFunctions = ref([
   ]
 ])
 
+// 四角色模式的功能列表（新的）
+const fourRoleFunctions = ref([
+  // 普通教师功能
+  [
+    [
+      { name: '考评结果', description: '查看本教研室的考评结果和排名', icon: View, route: '/result/eval-123' },
+      { name: '评分详情', description: '查看详细的评分记录和评语', icon: Document, route: '/result/eval-123' },
+      { name: '改进措施', description: '查看教研室的改进措施', icon: CircleCheck, route: '/improvement-plan/1' }
+    ],
+    [
+      { name: '历史对比', description: '查看历年考评数据对比', icon: TrendCharts, route: '#' },
+      { name: '指标雷达图', description: '查看各项指标的雷达图分析', icon: PieChart, route: '#' }
+    ]
+  ],
+  // 教研室负责人功能
+  [
+    [
+      { name: '填写自评表', description: '在线填写工作考核表，支持实时保存', icon: EditPen, route: '/self-evaluation' },
+      { name: '查看自评表', description: '查看已提交的自评表内容', icon: View, route: '/result/eval-123' }
+    ],
+    [
+      { name: '上传附件', description: '上传支撑材料，支持多文件批量上传', icon: Upload, route: '/attachment-upload' },
+      { name: '附件列表', description: '查看和管理所有附件', icon: FolderOpened, route: '/attachment-management' }
+    ],
+    [
+      { name: '触发评分', description: '手动触发AI自动评分', icon: Monitor, route: '#' },
+      { name: '评分结果', description: '查看AI评分结果', icon: View, route: '/result/eval-123' }
+    ],
+    [
+      { name: '提交改进措施', description: '针对薄弱项提交改进措施', icon: EditPen, route: '/improvement-plan/1' },
+      { name: '查看审核状态', description: '查看改进措施的审核状态', icon: CircleCheck, route: '/improvement-plan/1' }
+    ]
+  ],
+  // 二级学院负责人功能
+  [
+    [
+      { name: '全院概览', description: '查看全院教研室考评概况', icon: TrendCharts, route: '/college-dashboard' },
+      { name: '教研室对比', description: '横向对比各教研室得分', icon: Histogram, route: '/college-dashboard' },
+      { name: '指标分析', description: '分析各项指标的得分情况', icon: DataAnalysis, route: '/college-dashboard' }
+    ],
+    [
+      { name: '改进措施审核', description: '审核教研室提交的改进措施', icon: Checked, route: '/improvement-plan/1' },
+      { name: '执行进度跟踪', description: '跟踪改进措施的执行进度', icon: Monitor, route: '/improvement-plan/1' },
+      { name: '督导记录', description: '添加督导批注和记录', icon: Document, route: '/improvement-plan/1' }
+    ]
+  ],
+  // 学校教务处负责人功能
+  [
+    [
+      { name: '全校概览', description: '查看全校考评进度和数据', icon: Monitor, route: '/president-office-dashboard' },
+      { name: '实时数据', description: '实时监控各教研室状态', icon: DataAnalysis, route: '/president-office-dashboard' },
+      { name: 'AI评分监控', description: '监控AI评分执行情况', icon: TrendCharts, route: '#' }
+    ],
+    [
+      { name: '手动评分', description: '考评小组和办公室进行专业评分', icon: Checked, route: '/manual-scoring' },
+      { name: '最终得分确定', description: '综合所有评分确定最终结果', icon: Medal, route: '/final-score' },
+      { name: '评分记录查询', description: '查询所有评审人打分记录', icon: Document, route: '/management-results' }
+    ],
+    [
+      { name: '异常数据列表', description: '查看AI标记的异常数据', icon: Warning, route: '/anomaly-handling' },
+      { name: '处理记录', description: '查看异常数据处理记录', icon: Document, route: '/anomaly-handling' }
+    ],
+    [
+      { name: '发起公示', description: '公示考评结果，透明公开', icon: Promotion, route: '/publication' },
+      { name: '公示状态', description: '查看公示进度和状态', icon: View, route: '/publication' },
+      { name: '数据同步', description: '同步数据至校长办公会', icon: Connection, route: '/data-sync' }
+    ]
+  ]
+])
+
+// 当前使用的功能列表
+const moduleFunctions = computed(() => {
+  return isRoleMode.value ? fourRoleFunctions.value : threePortFunctions.value
+})
+
 // 当前选中模块的标签页
 const currentTabs = computed(() => moduleTabs.value[activeModule.value])
 
@@ -199,11 +366,22 @@ const currentFunctions = computed(() => {
 const selectModule = (index: number) => {
   activeModule.value = index
   activeTab.value = 0
+  // 仅在四角色模式下更新用户角色
+  if (isRoleMode.value) {
+    const role = modules.value[index].role as any
+    if (role) {
+      authStore.setRole(role)
+    }
+  }
 }
 
 const goToHome = () => {
   // 重置到默认状态
-  activeModule.value = 0
+  if (isRoleMode.value) {
+    activeModule.value = 1 // 默认教研室负责人
+  } else {
+    activeModule.value = 0 // 默认教研室端
+  }
   activeTab.value = 0
 }
 
@@ -227,7 +405,7 @@ const navigateTo = (route: string) => {
 
 /* 左侧边栏 */
 .sidebar {
-  width: 200px;
+  width: 220px;
   background: #1e3a5f;
   display: flex;
   flex-direction: column;
@@ -260,9 +438,19 @@ const navigateTo = (route: string) => {
 
 .sidebar-title {
   color: white;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
-  margin: 0;
+  margin: 0.5rem 0;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .sidebar-menu {
@@ -292,6 +480,23 @@ const navigateTo = (route: string) => {
   border-left-color: #7cb342;
 }
 
+/* 不同角色的激活色 */
+.role-teacher .menu-item.active {
+  border-left-color: #42a5f5;
+}
+
+.role-director .menu-item.active {
+  border-left-color: #66bb6a;
+}
+
+.role-college_leader .menu-item.active {
+  border-left-color: #ab47bc;
+}
+
+.role-academic_affairs .menu-item.active {
+  border-left-color: #ff7043;
+}
+
 .menu-icon {
   font-size: 1.3rem;
   margin-right: 0.75rem;
@@ -317,18 +522,60 @@ const navigateTo = (route: string) => {
 }
 
 .user-avatar {
-  font-size: 1.5rem;
-  margin-right: 0.5rem;
+  font-size: 2rem;
+  margin-right: 0.75rem;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
 }
 
 .user-name {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.user-role-text {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 模式切换按钮 */
+.mode-toggle {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toggle-button {
+  width: 100%;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+}
+
+.toggle-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.toggle-button .el-icon {
+  font-size: 1.1rem;
 }
 
 /* 主内容区 */
 .main-content {
   flex: 1;
-  margin-left: 200px;
+  margin-left: 220px;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -506,7 +753,9 @@ const navigateTo = (route: string) => {
   
   .sidebar-title,
   .menu-text,
-  .user-name {
+  .user-details,
+  .role-badge,
+  .mode-toggle {
     display: none;
   }
   

@@ -2,6 +2,7 @@
   <div class="page-header">
     <div class="header-left">
       <el-button 
+        v-if="showBack"
         type="primary" 
         :icon="HomeFilled" 
         circle 
@@ -11,6 +12,7 @@
       />
       <div class="header-content">
         <h1 class="page-title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-subtitle">{{ subtitle }}</p>
         <el-breadcrumb separator="/" v-if="breadcrumbs.length > 0" class="breadcrumb">
           <el-breadcrumb-item :to="{ path: '/' }">
             首页
@@ -42,10 +44,14 @@ interface Breadcrumb {
 
 interface Props {
   title: string
+  subtitle?: string
+  showBack?: boolean
   breadcrumbs?: Breadcrumb[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  subtitle: '',
+  showBack: true,
   breadcrumbs: () => []
 })
 
@@ -95,6 +101,12 @@ const goToHome = () => {
   font-size: 1.8rem;
   font-weight: 600;
   color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.page-subtitle {
+  font-size: 1rem;
+  color: #666;
   margin: 0 0 0.5rem 0;
 }
 
