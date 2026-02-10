@@ -5,20 +5,15 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "教研室工作考评系统"
     API_V1_STR: str = "/api"
     
-    # Database
+    # Database - 使用 SQLite
+    DATABASE_URL: str = "sqlite:///./teaching_office_evaluation.db"
+    
+    # PostgreSQL 配置（备用）
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "teaching_office_evaluation"
     POSTGRES_PORT: int = 5432
-    
-    @property
-    def DATABASE_URL(self) -> str:
-        # Use SQLite for quick testing if PostgreSQL is not available
-        import os
-        if os.getenv("USE_SQLITE", "false").lower() == "true":
-            return "sqlite:///./test.db"
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"
@@ -36,8 +31,20 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_API_URL: str = "https://api.deepseek.com/v1/chat/completions"
     
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # CORS - 允许的前端访问地址
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://101.33.211.98",
+        "http://101.33.211.98:80",
+        "http://101.33.211.98:3000",
+        "http://101.33.211.98:5173",
+        "http://101.33.211.98:8000",
+        "https://101.33.211.98",
+        "https://101.33.211.98:443"
+    ]
     
     class Config:
         env_file = ".env"

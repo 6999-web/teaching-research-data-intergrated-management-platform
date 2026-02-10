@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// 根据环境变量设置API基础URL
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 const apiClient = axios.create({
-  baseURL: '/api',
+  baseURL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'

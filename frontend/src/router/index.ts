@@ -5,8 +5,35 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      redirect: '/login'
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/Login.vue')
+    },
+    {
+      path: '/teaching-office-home',
+      name: 'teaching-office-home',
+      component: () => import('@/views/TeachingOfficeHome.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/management-home',
+      name: 'management-home',
+      component: () => import('@/views/ManagementHome.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/data-dashboard',
+      name: 'data-dashboard',
+      component: () => import('@/views/DataDashboard.vue')
+    },
+    {
+      path: '/home',
       name: 'home',
-      component: () => import('@/views/Home.vue')
+      component: () => import('@/views/Home.vue'),
+      meta: { requiresAuth: true }
     },
     {
       path: '/self-evaluation',

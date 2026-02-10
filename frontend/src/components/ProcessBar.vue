@@ -31,18 +31,18 @@ interface Step {
 
 const props = defineProps<{
   currentStep?: number
-  userRole: 'teacher' | 'director' | 'college_leader' | 'academic_affairs'
+  userRole: 'director' | 'college_leader' | 'evaluation_team' | 'evaluation_office' | 'president_office'
 }>()
 
 const steps: Step[] = [
-  { label: '自评填报', roleSteps: ['teacher', 'director'] },
-  { label: '材料上传', roleSteps: ['teacher', 'director'] },
-  { label: 'AI评分', roleSteps: ['director', 'academic_affairs'] },
-  { label: '手动评分', roleSteps: ['academic_affairs'] },
-  { label: '最终得分', roleSteps: ['academic_affairs'] },
-  { label: '数据审定', roleSteps: [] },
-  { label: '结果公示', roleSteps: ['academic_affairs'] },
-  { label: '改进闭环', roleSteps: ['teacher', 'director', 'college_leader'] }
+  { label: '自评填报', roleSteps: ['director'] },
+  { label: '材料上传', roleSteps: ['director'] },
+  { label: 'AI评分', roleSteps: ['evaluation_team'] },
+  { label: '手动评分', roleSteps: ['evaluation_team'] },
+  { label: '最终得分', roleSteps: ['evaluation_team'] },
+  { label: '数据审定', roleSteps: ['evaluation_office'] },
+  { label: '结果公示', roleSteps: ['evaluation_office'] },
+  { label: '改进闭环', roleSteps: ['director', 'college_leader'] }
 ]
 
 const highlightSteps = computed(() => {

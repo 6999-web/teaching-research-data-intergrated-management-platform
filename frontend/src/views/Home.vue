@@ -150,9 +150,9 @@ const threePortModules = ref([
 // 四个角色模块（新的）
 const fourRoleModules = ref([
   { name: '普通教师', icon: User, role: 'teacher' },
-  { name: '教研室负责人', icon: Edit, role: 'director' },
+  { name: '教研室', icon: Edit, role: 'director' },
   { name: '二级学院负责人', icon: Histogram, role: 'college_leader' },
-  { name: '学校教务处负责人', icon: Setting, role: 'academic_affairs' }
+  { name: '评教小组', icon: Medal, role: 'evaluation_team' }
 ])
 
 // 当前使用的模块
@@ -212,7 +212,7 @@ const fourRoleTabs = ref([
     { name: '我的教研室', icon: Document, description: '查看本教研室考评结果' },
     { name: '数据分析', icon: DataAnalysis, description: '历史对比和指标分析' }
   ],
-  // 教研室负责人
+  // 教研室
   [
     { name: '自评管理', icon: EditPen, description: '填写和管理自评表' },
     { name: '材料管理', icon: Upload, description: '上传和管理附件' },
@@ -294,7 +294,7 @@ const fourRoleFunctions = ref([
       { name: '指标雷达图', description: '查看各项指标的雷达图分析', icon: PieChart, route: '#' }
     ]
   ],
-  // 教研室负责人功能
+  // 教研室功能
   [
     [
       { name: '填写自评表', description: '在线填写工作考核表，支持实时保存', icon: EditPen, route: '/self-evaluation' },
@@ -378,7 +378,7 @@ const selectModule = (index: number) => {
 const goToHome = () => {
   // 重置到默认状态
   if (isRoleMode.value) {
-    activeModule.value = 1 // 默认教研室负责人
+    activeModule.value = 1 // 默认教研室
   } else {
     activeModule.value = 0 // 默认教研室端
   }
@@ -493,7 +493,7 @@ const navigateTo = (route: string) => {
   border-left-color: #ab47bc;
 }
 
-.role-academic_affairs .menu-item.active {
+.role-evaluation_team .menu-item.active {
   border-left-color: #ff7043;
 }
 
