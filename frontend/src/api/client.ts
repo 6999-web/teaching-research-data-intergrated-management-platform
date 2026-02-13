@@ -37,6 +37,21 @@ apiClient.interceptors.response.use(
 
 // API methods for self-evaluation
 export const selfEvaluationApi = {
+  // Create or save self-evaluation
+  save: (data: any) => {
+    return apiClient.post('/teaching-office/self-evaluation', data)
+  },
+  
+  // Get self-evaluation by ID
+  get: (evaluationId: string) => {
+    return apiClient.get(`/teaching-office/self-evaluation/${evaluationId}`)
+  },
+  
+  // Update self-evaluation
+  update: (evaluationId: string, data: any) => {
+    return apiClient.put(`/teaching-office/self-evaluation/${evaluationId}`, data)
+  },
+  
   // Submit self-evaluation (lock form and attachments)
   submit: (evaluationId: string) => {
     return apiClient.post(`/teaching-office/self-evaluation/${evaluationId}/submit`)
@@ -57,6 +72,11 @@ export const selfEvaluationApi = {
 
 // API methods for scoring
 export const scoringApi = {
+  // Get evaluations ready for manual scoring (AI scored)
+  getEvaluationsForScoring: (params?: { status?: string; year?: number }) => {
+    return apiClient.get('/scoring/evaluations-for-scoring', { params })
+  },
+  
   // Submit manual score
   submitManualScore: (data: any) => {
     return apiClient.post('/scoring/manual-score', data)

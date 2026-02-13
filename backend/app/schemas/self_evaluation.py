@@ -4,26 +4,16 @@ from datetime import datetime
 from uuid import UUID
 
 
-class SelfEvaluationContent(BaseModel):
-    """自评表内容结构"""
-    teaching_process_management: str = Field(..., description="教学过程管理")
-    course_construction: str = Field(..., description="课程建设")
-    teaching_reform_projects: int = Field(..., ge=0, description="教学改革项目个数")
-    honorary_awards: int = Field(..., ge=0, description="荣誉表彰个数")
-    # 可以根据实际需求添加更多字段
-    additional_fields: Optional[Dict[str, Any]] = Field(default=None, description="其他自评内容")
-
-
 class SelfEvaluationCreate(BaseModel):
     """创建自评表请求模型"""
     teaching_office_id: UUID = Field(..., description="教研室ID")
     evaluation_year: int = Field(..., ge=2000, le=2100, description="考评年份")
-    content: SelfEvaluationContent = Field(..., description="自评内容")
+    content: Dict[str, Any] = Field(..., description="自评内容 - 支持任意JSON结构")
 
 
 class SelfEvaluationUpdate(BaseModel):
     """更新自评表请求模型"""
-    content: Optional[SelfEvaluationContent] = Field(None, description="自评内容")
+    content: Optional[Dict[str, Any]] = Field(None, description="自评内容 - 支持任意JSON结构")
     status: Optional[str] = Field(None, description="表单状态")
 
 

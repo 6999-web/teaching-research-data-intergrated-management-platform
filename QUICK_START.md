@@ -58,6 +58,21 @@ npm run dev
 - **后端 API 文档**: http://localhost:8000/docs
 - **MinIO 控制台**: http://localhost:9001 (minioadmin/minioadmin)
 
+### 步骤 6: 测试登录
+
+#### 教研室端
+1. 访问 http://localhost:3000
+2. 点击"教研室端"卡片
+3. 输入用户名: `123`，密码: `123123`
+4. 登录成功后可以填写考评表
+
+#### 管理端
+1. 访问 http://localhost:3000
+2. 点击"管理端"卡片
+3. 输入用户名: `admin`，密码: `123123`
+4. 选择角色: 评教小组
+5. 登录成功后可以进行评分管理
+
 ## 自动化安装
 
 ### Windows

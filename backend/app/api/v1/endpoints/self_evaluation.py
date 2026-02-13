@@ -55,7 +55,7 @@ def create_self_evaluation(
             )
         
         # 更新现有自评表
-        existing_evaluation.content = evaluation_data.content.model_dump()
+        existing_evaluation.content = evaluation_data.content
         existing_evaluation.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(existing_evaluation)
@@ -70,7 +70,7 @@ def create_self_evaluation(
     new_evaluation = SelfEvaluation(
         teaching_office_id=evaluation_data.teaching_office_id,
         evaluation_year=evaluation_data.evaluation_year,
-        content=evaluation_data.content.model_dump(),
+        content=evaluation_data.content,
         status="draft"
     )
     
@@ -142,7 +142,7 @@ def update_self_evaluation(
     
     # 更新内容
     if evaluation_data.content is not None:
-        evaluation.content = evaluation_data.content.model_dump()
+        evaluation.content = evaluation_data.content
     
     # 更新状态
     if evaluation_data.status is not None:
@@ -199,16 +199,17 @@ def submit_self_evaluation(
             detail="自评表已经提交并锁定"
         )
     
-    # 检查是否有附件
+    # 检查是否有附件（可选，不强制要求）
     attachments_count = db.query(Attachment).filter(
         Attachment.evaluation_id == evaluation_id
     ).count()
     
-    if attachments_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先上传附件后再提交"
-        )
+    # 注意：附件不是必需的，允许没有附件的情况下提交
+    # if attachments_count == 0:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="请先上传附件后再提交"
+    #     )
     
     # 更新状态为 locked
     evaluation.status = "locked"
@@ -370,19 +371,20 @@ async def trigger_ai_scoring(
     if evaluation.status != "locked":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"自评表状态不正确，当前状态: {evaluation.status}。请先提交自评表和附件。"
+            detail=f"自评表状态不正确，当前状态: {evaluation.status}。请先提交自评表。"
         )
     
-    # 检查是否有附件
+    # 检查是否有附件（可选，不强制要求）
     attachments_count = db.query(Attachment).filter(
         Attachment.evaluation_id == evaluation_id
     ).count()
     
-    if attachments_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="自评表没有附件，无法进行AI评分"
-        )
+    # 注意：附件不是必需的，允许没有附件的情况下进行AI评分
+    # if attachments_count == 0:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="自评表没有附件，无法进行AI评分"
+    #     )
     
     # 检查是否已经触发过AI评分
     from app.models.ai_score import AIScore

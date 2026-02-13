@@ -122,7 +122,7 @@ class AIScoringService:
     
     def _build_scoring_prompt(self, evaluation: SelfEvaluation, attachments: List[Attachment]) -> str:
         """
-        构建评分提示词
+        构建评分提示词（支持新评分表结构）
         
         Args:
             evaluation: 自评表
@@ -133,71 +133,152 @@ class AIScoringService:
         """
         content = evaluation.content
         
+        # 提取常规教学工作内容
+        regular_teaching = content.get('regularTeaching', {})
+        
+        # 提取特色与亮点项目
+        highlights = content.get('highlights', {})
+        reform_projects = highlights.get('teachingReformProjects', {}).get('items', [])
+        honors = highlights.get('teachingHonors', {}).get('items', [])
+        competitions = highlights.get('teachingCompetitions', {}).get('items', [])
+        innovations = highlights.get('innovationCompetitions', {}).get('items', [])
+        
+        # 提取负面清单
+        negative_list = content.get('negativeList', {})
+        
         prompt = f"""你是教研室工作考评专家，请根据以下自评表内容和附件信息进行评分。
 
-自评表内容：
-- 教学过程管理：{content.get('teaching_process_management', '')}
-- 课程建设：{content.get('course_construction', '')}
-- 教学改革项目个数（自评填写）：{content.get('teaching_reform_projects', 0)}
-- 荣誉表彰个数（自评填写）：{content.get('honorary_awards', 0)}
+一、常规教学工作（每项满分10分，共80分）
 
-附件信息：
+1. 教学过程管理（自评分：{regular_teaching.get('teachingProcessManagement', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('teachingProcessManagement', {}).get('content', '')}
+
+2. 教学质量管理（自评分：{regular_teaching.get('teachingQualityManagement', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('teachingQualityManagement', {}).get('content', '')}
+
+3. 课程考核（自评分：{regular_teaching.get('courseAssessment', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('courseAssessment', {}).get('content', '')}
+
+4. 教育教学科研工作（自评分：{regular_teaching.get('educationResearch', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('educationResearch', {}).get('content', '')}
+
+5. 课程建设（自评分：{regular_teaching.get('courseConstruction', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('courseConstruction', {}).get('content', '')}
+
+6. 教师队伍建设（自评分：{regular_teaching.get('teacherTeamBuilding', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('teacherTeamBuilding', {}).get('content', '')}
+
+7. 科学研究与学术交流（自评分：{regular_teaching.get('researchAndExchange', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('researchAndExchange', {}).get('content', '')}
+
+8. 教学档案室管理与建设（自评分：{regular_teaching.get('archiveManagement', {}).get('selfScore', 0)}分）
+   内容：{regular_teaching.get('archiveManagement', {}).get('content', '')}
+
+二、特色与亮点项目
+
+1. 教学改革项目（自评填写{len(reform_projects)}项）：
+"""
+        
+        for i, project in enumerate(reform_projects, 1):
+            prompt += f"   {i}. {project.get('name', '')} - {project.get('level', '')} - 自评{project.get('score', 0)}分\n"
+        
+        prompt += f"\n2. 年度获得教学相关荣誉表彰（自评填写{len(honors)}项）：\n"
+        for i, honor in enumerate(honors, 1):
+            prompt += f"   {i}. {honor.get('name', '')} - {honor.get('level', '')} - 自评{honor.get('score', 0)}分\n"
+        
+        prompt += f"\n3. 教学比赛（自评填写{len(competitions)}项）：\n"
+        for i, comp in enumerate(competitions, 1):
+            prompt += f"   {i}. {comp.get('name', '')} - {comp.get('levelPrize', '')} - 自评{comp.get('score', 0)}分\n"
+        
+        prompt += f"\n4. 指导创新创业比赛获奖情况（自评填写{len(innovations)}项）：\n"
+        for i, innov in enumerate(innovations, 1):
+            prompt += f"   {i}. {innov.get('name', '')} - {innov.get('levelPrize', '')} - 自评{innov.get('score', 0)}分\n"
+        
+        prompt += f"""
+三、负面清单
+
+1. 师德师风违规：{negative_list.get('ethicsViolations', {}).get('count', 0)}起，扣{negative_list.get('ethicsViolations', {}).get('deduction', 0)}分
+2. 教学事故：{negative_list.get('teachingAccidents', {}).get('count', 0)}起，扣{negative_list.get('teachingAccidents', {}).get('deduction', 0)}分
+3. 意识形态问题：{negative_list.get('ideologyIssues', {}).get('count', 0)}起，扣{negative_list.get('ideologyIssues', {}).get('deduction', 0)}分
+4. 工作量未完成：{negative_list.get('workloadIncomplete', {}).get('percentage', 0)}%，扣{negative_list.get('workloadIncomplete', {}).get('deduction', 0)}分
+
+附件信息（共{len(attachments)}个）：
 """
         
         for i, attachment in enumerate(attachments, 1):
             prompt += f"{i}. 文件名：{attachment.file_name}，考核指标：{attachment.indicator}\n"
         
         prompt += """
-预设分值标准（满分100分）：
-1. 教学过程管理（25分）：
-   - 优秀（22-25分）：教学文档齐全、管理规范、有创新举措
-   - 良好（18-21分）：教学文档完整、管理规范
-   - 合格（15-17分）：教学文档基本完整、管理基本规范
-   - 不合格（0-14分）：教学文档不完整或管理不规范
+评分任务：
 
-2. 课程建设（25分）：
-   - 优秀（22-25分）：课程体系完善、有特色课程、建设成效显著
-   - 良好（18-21分）：课程体系完整、建设成效良好
-   - 合格（15-17分）：课程体系基本完整、有一定建设成效
-   - 不合格（0-14分）：课程体系不完整或建设成效不明显
+1. 对8个常规教学指标进行AI评分（每项0-10分）
+2. 验证特色亮点项目的附件支撑材料是否充分
+3. 检测自评填写的项目数量与附件数量是否一致
+4. 对附件进行分类（教学改革项目/荣誉表彰/教学比赛/创新创业比赛/其他）
 
-3. 教学改革项目（25分）：
-   - 每个项目5分，最多25分
-   - 需要有附件证明材料支撑
-   - 项目级别越高分值可适当上浮
-
-4. 荣誉表彰（25分）：
-   - 每个荣誉5分，最多25分
-   - 需要有附件证明材料支撑
-   - 荣誉级别越高分值可适当上浮
-
-请按照以下格式返回评分结果（JSON格式）：
+请按照以下JSON格式返回评分结果：
 {
-    "total_score": 总分（数字），
+    "total_score": AI评定的总分（数字，包含负面清单扣分），
     "indicator_scores": [
         {
-            "indicator": "考核指标名称",
-            "score": 分数（数字），
+            "indicator": "教学过程管理",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由，需要对比自评分和AI评分的差异"
+        },
+        {
+            "indicator": "教学质量管理",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "课程考核",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "教育教学科研工作",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "课程建设",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "教师队伍建设",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "科学研究与学术交流",
+            "score": AI评分（0-10），
+            "reasoning": "评分理由"
+        },
+        {
+            "indicator": "教学档案室管理与建设",
+            "score": AI评分（0-10），
             "reasoning": "评分理由"
         }
     ],
     "parsed_reform_projects": 从附件中解析出的教学改革项目个数（数字），
-    "parsed_honorary_awards": 从附件中解析出的荣誉表彰个数（数字），
+    "parsed_honors": 从附件中解析出的荣誉表彰个数（数字），
+    "parsed_competitions": 从附件中解析出的教学比赛个数（数字），
+    "parsed_innovations": 从附件中解析出的创新创业比赛个数（数字），
     "attachment_classifications": [
         {
             "file_name": "附件文件名",
-            "classified_indicator": "teaching_reform_projects 或 honorary_awards 或 other"
+            "classified_indicator": "teaching_reform_projects 或 teaching_honors 或 teaching_competitions 或 innovation_competitions 或 other"
         }
     ]
 }
 
-注意：
-1. 请严格按照预设分值标准进行评分
-2. 请仔细对比自评表填写的项目个数与附件中实际的项目个数
-3. 如果个数不一致，请在parsed_reform_projects和parsed_honorary_awards中如实反映附件中的实际个数
-4. 总分应该是所有指标分数的加权总和，不超过100分
-5. 请根据附件文件名和内容，将每个附件分类到对应的考核指标（teaching_reform_projects、honorary_awards或other）
-6. attachment_classifications数组中应包含所有附件的分类结果
+注意事项：
+1. 常规教学工作每项满分10分，请根据内容质量客观评分
+2. 如果自评分明显偏高或偏低，请在reasoning中说明
+3. 特色亮点项目需要有附件支撑，请仔细核对数量
+4. 负面清单扣分已在自评表中计算，AI评分时需要考虑
+5. 附件分类要准确，便于后续管理和审核
 """
         
         return prompt
@@ -271,38 +352,60 @@ class AIScoringService:
     def _get_mock_response(self) -> str:
         """获取模拟响应数据（用于测试）"""
         mock_data = {
-            "total_score": 85.5,
+            "total_score": 78.5,
             "indicator_scores": [
                 {
                     "indicator": "教学过程管理",
-                    "score": 22.0,
-                    "reasoning": "教学文档齐全、管理规范，符合优秀标准"
+                    "score": 8.5,
+                    "reasoning": "教学文档齐全、管理规范，自评分9分略高，AI评定8.5分"
+                },
+                {
+                    "indicator": "教学质量管理",
+                    "score": 9.0,
+                    "reasoning": "教学质量管理制度完善，执行到位，符合优秀标准"
+                },
+                {
+                    "indicator": "课程考核",
+                    "score": 8.0,
+                    "reasoning": "课程考核规范，试题库建设良好"
+                },
+                {
+                    "indicator": "教育教学科研工作",
+                    "score": 9.5,
+                    "reasoning": "教研活动丰富，成效显著"
                 },
                 {
                     "indicator": "课程建设",
-                    "score": 23.5,
-                    "reasoning": "课程体系完善、有特色课程、建设成效显著，符合优秀标准"
+                    "score": 9.0,
+                    "reasoning": "课程体系完善，有特色课程"
                 },
                 {
-                    "indicator": "教学改革项目",
-                    "score": 15.0,
-                    "reasoning": "根据附件解析出3个教学改革项目，每个5分"
+                    "indicator": "教师队伍建设",
+                    "score": 8.5,
+                    "reasoning": "教师培养规划清晰，执行良好"
                 },
                 {
-                    "indicator": "荣誉表彰",
-                    "score": 10.0,
-                    "reasoning": "根据附件解析出2个荣誉表彰，每个5分"
+                    "indicator": "科学研究与学术交流",
+                    "score": 8.0,
+                    "reasoning": "科研项目和学术交流活动较为活跃"
+                },
+                {
+                    "indicator": "教学档案室管理与建设",
+                    "score": 9.0,
+                    "reasoning": "档案管理规范，归档及时"
                 }
             ],
             "parsed_reform_projects": 3,
-            "parsed_honorary_awards": 2,
+            "parsed_honors": 2,
+            "parsed_competitions": 1,
+            "parsed_innovations": 2,
             "attachment_classifications": []
         }
         return json.dumps(mock_data, ensure_ascii=False)
     
     def _parse_ai_response(self, response: str) -> Dict[str, Any]:
         """
-        解析AI响应
+        解析AI响应（支持新评分表结构）
         
         Args:
             response: AI响应内容
@@ -315,7 +418,14 @@ class AIScoringService:
             data = json.loads(response)
             
             # 验证必需字段
-            required_fields = ["total_score", "indicator_scores", "parsed_reform_projects", "parsed_honorary_awards"]
+            required_fields = [
+                "total_score", 
+                "indicator_scores", 
+                "parsed_reform_projects", 
+                "parsed_honors",
+                "parsed_competitions",
+                "parsed_innovations"
+            ]
             for field in required_fields:
                 if field not in data:
                     raise ValueError(f"AI响应缺少必需字段: {field}")
@@ -339,7 +449,7 @@ class AIScoringService:
     
     def _detect_anomalies(self, evaluation: SelfEvaluation, score_data: Dict[str, Any]) -> List[Anomaly]:
         """
-        检测异常数据
+        检测异常数据（支持新评分表结构）
         
         实现需求 4.7, 4.8, 4.9, 4.10:
         - 4.7: 自动标记填写个数与附件解析个数不一致的数据
@@ -356,20 +466,19 @@ class AIScoringService:
         """
         anomalies = []
         content = evaluation.content
+        highlights = content.get('highlights', {})
         
-        # 检测教学改革项目数量不一致 (需求 4.4, 4.7, 4.8)
-        declared_reform = content.get('teaching_reform_projects', 0)
+        # 检测教学改革项目数量不一致
+        declared_reform = len(highlights.get('teachingReformProjects', {}).get('items', []))
         parsed_reform = score_data.get('parsed_reform_projects', 0)
         
         if declared_reform != parsed_reform:
-            # 生成清晰的对比说明 (需求 4.8)
             description = self._generate_anomaly_description(
                 indicator_name="教学改革项目",
                 declared_count=declared_reform,
                 parsed_count=parsed_reform
             )
             
-            # 创建异常记录，status="pending"表示需要人工复核 (需求 4.7, 4.10)
             anomaly = Anomaly(
                 evaluation_id=evaluation.id,
                 type="count_mismatch",
@@ -377,32 +486,76 @@ class AIScoringService:
                 declared_count=declared_reform,
                 parsed_count=parsed_reform,
                 description=description,
-                status="pending"  # 需求 4.10: 转人工复核流程
+                status="pending"
             )
             anomalies.append(anomaly)
             logger.warning(f"检测到异常: {description}")
         
-        # 检测荣誉表彰数量不一致 (需求 4.5, 4.7, 4.8)
-        declared_awards = content.get('honorary_awards', 0)
-        parsed_awards = score_data.get('parsed_honorary_awards', 0)
+        # 检测荣誉表彰数量不一致
+        declared_honors = len(highlights.get('teachingHonors', {}).get('items', []))
+        parsed_honors = score_data.get('parsed_honors', 0)
         
-        if declared_awards != parsed_awards:
-            # 生成清晰的对比说明 (需求 4.8)
+        if declared_honors != parsed_honors:
             description = self._generate_anomaly_description(
                 indicator_name="荣誉表彰",
-                declared_count=declared_awards,
-                parsed_count=parsed_awards
+                declared_count=declared_honors,
+                parsed_count=parsed_honors
             )
             
-            # 创建异常记录，status="pending"表示需要人工复核 (需求 4.7, 4.10)
             anomaly = Anomaly(
                 evaluation_id=evaluation.id,
                 type="count_mismatch",
-                indicator="honorary_awards",
-                declared_count=declared_awards,
-                parsed_count=parsed_awards,
+                indicator="teaching_honors",
+                declared_count=declared_honors,
+                parsed_count=parsed_honors,
                 description=description,
-                status="pending"  # 需求 4.10: 转人工复核流程
+                status="pending"
+            )
+            anomalies.append(anomaly)
+            logger.warning(f"检测到异常: {description}")
+        
+        # 检测教学比赛数量不一致
+        declared_competitions = len(highlights.get('teachingCompetitions', {}).get('items', []))
+        parsed_competitions = score_data.get('parsed_competitions', 0)
+        
+        if declared_competitions != parsed_competitions:
+            description = self._generate_anomaly_description(
+                indicator_name="教学比赛",
+                declared_count=declared_competitions,
+                parsed_count=parsed_competitions
+            )
+            
+            anomaly = Anomaly(
+                evaluation_id=evaluation.id,
+                type="count_mismatch",
+                indicator="teaching_competitions",
+                declared_count=declared_competitions,
+                parsed_count=parsed_competitions,
+                description=description,
+                status="pending"
+            )
+            anomalies.append(anomaly)
+            logger.warning(f"检测到异常: {description}")
+        
+        # 检测创新创业比赛数量不一致
+        declared_innovations = len(highlights.get('innovationCompetitions', {}).get('items', []))
+        parsed_innovations = score_data.get('parsed_innovations', 0)
+        
+        if declared_innovations != parsed_innovations:
+            description = self._generate_anomaly_description(
+                indicator_name="创新创业比赛",
+                declared_count=declared_innovations,
+                parsed_count=parsed_innovations
+            )
+            
+            anomaly = Anomaly(
+                evaluation_id=evaluation.id,
+                type="count_mismatch",
+                indicator="innovation_competitions",
+                declared_count=declared_innovations,
+                parsed_count=parsed_innovations,
+                description=description,
+                status="pending"
             )
             anomalies.append(anomaly)
             logger.warning(f"检测到异常: {description}")
@@ -445,14 +598,16 @@ class AIScoringService:
     
     def _classify_attachments(self, attachments: List[Attachment], score_data: Dict[str, Any]) -> int:
         """
-        根据AI评分结果自动分类附件 (需求 5.1, 5.2, 5.3, 5.5, 5.6)
+        根据AI评分结果自动分类附件（支持新评分表结构）
         
         实现需求:
         - 5.1: 按考核指标自动分类附件
         - 5.2: 支持按"教学改革项目"指标分类附件
         - 5.3: 支持按"荣誉表彰"指标分类附件
-        - 5.5: 关联附件与对应教研室（已通过evaluation_id关联）
-        - 5.6: 关联附件与对应考核指标（通过indicator字段）
+        - 5.4: 支持按"教学比赛"指标分类附件
+        - 5.5: 支持按"创新创业比赛"指标分类附件
+        - 5.6: 关联附件与对应教研室（已通过evaluation_id关联）
+        - 5.7: 关联附件与对应考核指标（通过indicator字段）
         
         Args:
             attachments: 附件列表
@@ -476,17 +631,26 @@ class AIScoringService:
         
         classified_count = 0
         
-        # 更新每个附件的分类 (需求 5.1, 5.2, 5.3, 5.6)
+        # 有效的分类指标
+        valid_indicators = [
+            'teaching_reform_projects',
+            'teaching_honors', 
+            'teaching_competitions',
+            'innovation_competitions',
+            'other'
+        ]
+        
+        # 更新每个附件的分类
         for attachment in attachments:
             # 查找该附件的AI分类结果
             ai_indicator = classification_map.get(attachment.file_name)
             
             if ai_indicator:
-                # 只更新有效的分类指标 (需求 5.2, 5.3)
-                if ai_indicator in ['teaching_reform_projects', 'honorary_awards', 'other']:
-                    # 更新附件的考核指标 (需求 5.6)
+                # 只更新有效的分类指标
+                if ai_indicator in valid_indicators:
+                    # 更新附件的考核指标
                     attachment.indicator = ai_indicator
-                    # 标记为AI分类 (需求 5.1)
+                    # 标记为AI分类
                     attachment.classified_by = 'ai'
                     # 标记对象为已修改，确保SQLAlchemy跟踪变更
                     self.db.add(attachment)
@@ -507,7 +671,7 @@ class AIScoringService:
                     f"保持原分类: {attachment.indicator}"
                 )
         
-        # 附件已通过evaluation_id与教研室关联 (需求 5.5)
+        # 附件已通过evaluation_id与教研室关联
         # evaluation_id -> SelfEvaluation -> teaching_office_id
         
         return classified_count

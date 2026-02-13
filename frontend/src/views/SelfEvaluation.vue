@@ -8,55 +8,76 @@
       ]"
     />
 
-    <SelfEvaluationForm
+    <NewSelfEvaluationForm
       :teaching-office-id="teachingOfficeId"
       :evaluation-year="evaluationYear"
-      :initial-data="initialData"
-      @save="handleSave"
-      @preview="handlePreview"
+      @submit="handleSubmit"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
-import SelfEvaluationForm from '@/components/SelfEvaluationForm.vue'
-import type { SelfEvaluationFormData } from '@/types/selfEvaluation'
+import NewSelfEvaluationForm from '@/components/NewSelfEvaluationForm.vue'
+import { selfEvaluationApi } from '@/api/client'
 
-// Mock data - in real app, this would come from authentication/API
-const teachingOfficeId = ref('teaching-office-001')
+const router = useRouter()
+
+// Get teaching office ID from auth store or localStorage
+const teachingOfficeId = ref(localStorage.getItem('teachingOfficeId') || 'teaching-office-001')
 const evaluationYear = ref(new Date().getFullYear())
-const initialData = ref<SelfEvaluationFormData | undefined>(undefined)
 
-// Load existing data if available
-onMounted(async () => {
+// Handle form submission
+const handleSubmit = async (formData: any) => {
   try {
-    // TODO: Load existing self-evaluation data from API
-    // const response = await api.getSelfEvaluation(teachingOfficeId.value, evaluationYear.value)
-    // initialData.value = response.data
-  } catch (error) {
-    console.error('Failed to load self-evaluation data:', error)
-  }
-})
+    ElMessage.loading('正在提交自评表，请稍候...')
+    
+    // 一次性完成所有操作：保存 → 提交 → 锁定 → AI评分
+    // Step 1: Save self-evaluation
+    const saveResponse = await selfEvaluationApi.save({
+      teaching_office_id: teachingOfficeId.value,
+      evaluation_year: evaluationYear.value,
+      content: formData
+    })
 
-// Handle save
-const handleSave = async (data: SelfEvaluationFormData) => {
-  try {
-    // TODO: Call API to save self-evaluation
-    // await api.saveSelfEvaluation(data)
-    console.log('Saving self-evaluation:', data)
-    ElMessage.success('自评表保存成功')
-  } catch (error) {
-    console.error('Failed to save self-evaluation:', error)
-    ElMessage.error('保存失败，请重试')
-  }
-}
+    const evaluationId = saveResponse.data.evaluation_id
 
-// Handle preview
-const handlePreview = (data: SelfEvaluationFormData) => {
-  console.log('Previewing self-evaluation:', data)
+    // Step 2: Submit and lock (自动锁定，状态变为locked)
+    await selfEvaluationApi.submit(evaluationId)
+
+    // Step 3: Automatically trigger AI scoring (自动触发AI评分，状态变为ai_scored)
+    try {
+      await selfEvaluationApi.triggerAIScoring(evaluationId)
+    } catch (aiError) {
+      console.warn('AI评分触发失败，但不影响提交:', aiError)
+      // AI评分失败不影响提交结果，继续执行
+    }
+
+    // 提交成功
+    ElMessage.closeAll()
+    ElMessage.success('提交成功！数据已上传到考评小组端')
+    
+    // 跳转到主页
+    setTimeout(() => {
+      router.push('/teaching-office-home')
+    }, 1500)
+
+  } catch (error: any) {
+    ElMessage.closeAll()
+    console.error('Failed to submit self-evaluation:', error)
+    
+    // 更详细的错误提示
+    if (error.response?.status === 401) {
+      ElMessage.error('请先登录后再提交')
+    } else if (error.response?.data?.detail) {
+      ElMessage.error(error.response.data.detail)
+    } else {
+      ElMessage.error('提交失败，请检查网络连接或联系管理员')
+    }
+  }
 }
 </script>
 

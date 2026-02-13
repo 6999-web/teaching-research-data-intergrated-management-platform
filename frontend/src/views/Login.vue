@@ -196,18 +196,39 @@ const handleLogin = async () => {
       loginLoading.value = true
       
       try {
-        // 模拟登录请求
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // 调用真实的登录API
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            username: loginForm.value.username,
+            password: loginForm.value.password,
+            role: selectedPortal.value === 'teaching-office' ? 'teaching_office' : loginForm.value.role
+          })
+        })
         
-        // 设置用户信息
-        authStore.userName = loginForm.value.username
-        
-        // 教研室端直接设置为教研室角色
-        if (selectedPortal.value === 'teaching-office') {
-          authStore.userRole = 'director'
-        } else {
-          authStore.userRole = loginForm.value.role as any
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || '登录失败')
         }
+        
+        const data = await response.json()
+        
+        // 构造用户对象
+        const user = {
+          id: data.userId,
+          name: loginForm.value.username,
+          role: data.role,
+          teaching_office_id: data.teachingOfficeId || ''
+        }
+        
+        // 保存认证信息到store
+        authStore.setAuth({
+          token: data.token,
+          user: user
+        })
         
         ElMessage.success('登录成功！')
         showLoginDialog.value = false
@@ -218,8 +239,9 @@ const handleLogin = async () => {
         } else if (selectedPortal.value === 'management') {
           router.push('/management-home')
         }
-      } catch (error) {
-        ElMessage.error('登录失败，请检查用户名和密码')
+      } catch (error: any) {
+        console.error('Login error:', error)
+        ElMessage.error(error.message || '登录失败，请检查用户名和密码')
       } finally {
         loginLoading.value = false
       }

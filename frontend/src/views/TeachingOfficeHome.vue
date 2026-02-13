@@ -66,18 +66,17 @@
         <!-- 根据菜单显示不同内容 -->
         <div v-if="shouldShowForm" class="form-container">
           <!-- 填写自评表 -->
-          <SelfEvaluationForm
+          <NewSelfEvaluationForm
             v-if="activeMenu === 0"
-            :teaching-office-id="'teaching-office-001'"
+            :teaching-office-id="authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111'"
             :evaluation-year="new Date().getFullYear()"
-            @save="handleSave"
-            @preview="handlePreview"
+            @submit="handleSubmit"
           />
           
           <!-- 材料提交（附件管理） -->
           <AttachmentUpload
             v-if="activeMenu === 1"
-            :evaluation-id="'eval-001'"
+            :evaluation-id="currentEvaluationId || 'a1b2c3d4-e5f6-4a5b-8c9d-000000000000'"
             :evaluation-year="new Date().getFullYear()"
             :is-locked="false"
             @submit="handleAttachmentSubmit"
@@ -142,13 +141,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, markRaw, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import SelfEvaluationForm from '@/components/SelfEvaluationForm.vue'
+import NewSelfEvaluationForm from '@/components/NewSelfEvaluationForm.vue'
 import AttachmentUpload from '@/components/AttachmentUpload.vue'
-import type { SelfEvaluationFormData } from '@/types/selfEvaluation'
+import { selfEvaluationApi } from '@/api/client'
 import { 
   User,
   EditPen,
@@ -163,8 +162,22 @@ import {
 const router = useRouter()
 const authStore = useAuthStore()
 
+// 在组件挂载时加载认证信息
+onMounted(() => {
+  authStore.loadFromStorage()
+  
+  // 检查是否已登录
+  if (!authStore.isLoggedIn) {
+    ElMessage.warning('请先登录')
+    router.push('/login')
+  }
+})
+
 const activeMenu = ref(0)
 const activeTab = ref(0)
+
+// 保存当前的evaluation_id，用于附件上传
+const currentEvaluationId = ref<string>('')
 
 // 改进措施数据
 const improvementPlans = ref([
@@ -232,21 +245,21 @@ const shouldShowForm = computed(() => {
 
 // 菜单项（只有教研室）
 const menuItems = ref([
-  { name: '填写自评表', icon: EditPen },
-  { name: '材料提交', icon: Upload },
-  { name: '下学期改进措施', icon: CircleCheck }
+  { name: '填写自评表', icon: markRaw(EditPen) },
+  { name: '材料提交', icon: markRaw(Upload) },
+  { name: '下学期改进措施', icon: markRaw(CircleCheck) }
 ])
 
 // 标签页配置（只有教研室）
 const tabsConfig = [
   [
-    { name: '教研室工作考核评分表', icon: EditPen, description: '填写教研室工作考核评分表' }
+    { name: '教研室工作考核评分表', icon: markRaw(EditPen), description: '填写教研室工作考核评分表' }
   ],
   [
-    { name: '附件列表', icon: FolderOpened, description: '查看和提交附件' }
+    { name: '附件列表', icon: markRaw(FolderOpened), description: '查看和提交附件' }
   ],
   [
-    { name: '下学期改进措施', icon: CircleCheck, description: '查看下学期所有老师的改进措施' }
+    { name: '下学期改进措施', icon: markRaw(CircleCheck), description: '查看下学期所有老师的改进措施' }
   ]
 ]
 
@@ -265,9 +278,25 @@ const currentFunctions = computed(() => {
   return functionsConfig[activeMenu.value]?.[activeTab.value] || []
 })
 
-const selectMenu = (index: number) => {
+const selectMenu = async (index: number) => {
   activeMenu.value = index
   activeTab.value = 0
+  
+  // 如果切换到材料提交页面，且还没有evaluation_id，先创建草稿
+  if (index === 1 && !currentEvaluationId.value) {
+    try {
+      const saveResponse = await selfEvaluationApi.save({
+        teaching_office_id: authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+        evaluation_year: new Date().getFullYear(),
+        content: {} // 空内容，创建草稿
+      })
+      currentEvaluationId.value = saveResponse.data.evaluation_id
+    } catch (error) {
+      console.error('Failed to create draft evaluation:', error)
+      ElMessage.error('无法创建自评表草稿，请先填写自评表')
+      activeMenu.value = 0 // 返回到自评表页面
+    }
+  }
 }
 
 const goToHome = () => {
@@ -295,13 +324,57 @@ const handleLogout = () => {
 }
 
 // 自评表表单处理函数
-const handleSave = (data: SelfEvaluationFormData) => {
-  console.log('保存自评表:', data)
-  ElMessage.success('自评表保存成功')
-}
+const handleSubmit = async (formData: any) => {
+  try {
+    // 显示加载提示
+    const loadingMessage = ElMessage({
+      message: '正在提交自评表，请稍候...',
+      type: 'info',
+      duration: 0,
+      showClose: false
+    })
+    
+    // Step 1: Save self-evaluation
+    const saveResponse = await selfEvaluationApi.save({
+      teaching_office_id: authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+      evaluation_year: new Date().getFullYear(),
+      content: formData
+    })
 
-const handlePreview = (data: SelfEvaluationFormData) => {
-  console.log('预览自评表:', data)
+    const evaluationId = saveResponse.data.evaluation_id
+
+    // 保存evaluation_id供附件上传使用
+    currentEvaluationId.value = evaluationId
+
+    // Step 2: Submit and lock
+    await selfEvaluationApi.submit(evaluationId)
+
+    // Step 3: Trigger AI scoring
+    try {
+      await selfEvaluationApi.triggerAIScoring(evaluationId)
+    } catch (aiError) {
+      console.warn('AI评分触发失败，但不影响提交:', aiError)
+    }
+
+    // Success
+    loadingMessage.close()
+    ElMessage.success('提交成功！数据已上传到考评小组端')
+    
+  } catch (error: any) {
+    console.error('Failed to submit self-evaluation:', error)
+    
+    if (error.response?.status === 401) {
+      ElMessage.error('请先登录后再提交')
+      // 跳转到登录页
+      setTimeout(() => {
+        router.push('/login')
+      }, 1500)
+    } else if (error.response?.data?.detail) {
+      ElMessage.error(error.response.data.detail)
+    } else {
+      ElMessage.error('提交失败，请检查网络连接或联系管理员')
+    }
+  }
 }
 
 // 附件管理处理函数

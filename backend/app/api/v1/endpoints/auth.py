@@ -28,7 +28,7 @@ def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -36,7 +36,7 @@ def login(
     if not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -44,7 +44,7 @@ def login(
     if user.role != login_data.role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User role does not match requested role",
+            detail=f"用户角色不匹配。您的角色是 {user.role}，但尝试以 {login_data.role} 身份登录",
         )
     
     # Create access token
@@ -62,6 +62,7 @@ def login(
         token=access_token,
         userId=str(user.id),
         role=user.role,
+        teachingOfficeId=str(user.teaching_office_id) if user.teaching_office_id else None,
         expiresIn=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
     )
 

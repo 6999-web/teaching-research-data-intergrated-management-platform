@@ -27,8 +27,75 @@ from app.schemas.scoring import (
     ScoringAuditResponse,
 )
 from app.core.logging_middleware import log_operation
+from pydantic import BaseModel
 
 router = APIRouter()
+
+
+class EvaluationForScoring(BaseModel):
+    """Evaluation ready for manual scoring"""
+    id: UUID
+    teaching_office_id: UUID
+    teaching_office_name: str
+    evaluation_year: int
+    status: str
+    submitted_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+@router.get("/evaluations-for-scoring", response_model=List[EvaluationForScoring])
+def get_evaluations_for_scoring(
+    status: Optional[str] = Query(None, description="Filter by status (e.g., 'locked', 'ai_scored')"),
+    year: Optional[int] = Query(None, description="Filter by evaluation year"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_management_roles)
+):
+    """
+    Get evaluations ready for manual scoring.
+    
+    Returns evaluations that are:
+    - locked (submitted but not yet AI scored)
+    - ai_scored (AI scored but not yet manually scored)
+    """
+    query = db.query(
+        SelfEvaluation.id,
+        SelfEvaluation.teaching_office_id,
+        SelfEvaluation.evaluation_year,
+        SelfEvaluation.status,
+        SelfEvaluation.submitted_at,
+        TeachingOffice.name.label("teaching_office_name")
+    ).join(
+        TeachingOffice, SelfEvaluation.teaching_office_id == TeachingOffice.id
+    )
+    
+    # Filter by status - default to locked and ai_scored
+    if status:
+        query = query.filter(SelfEvaluation.status == status)
+    else:
+        query = query.filter(SelfEvaluation.status.in_(["locked", "ai_scored"]))
+    
+    # Filter by year
+    if year:
+        query = query.filter(SelfEvaluation.evaluation_year == year)
+    
+    # Order by submitted_at descending
+    query = query.order_by(SelfEvaluation.submitted_at.desc())
+    
+    evaluations = query.all()
+    
+    return [
+        EvaluationForScoring(
+            id=e.id,
+            teaching_office_id=e.teaching_office_id,
+            teaching_office_name=e.teaching_office_name,
+            evaluation_year=e.evaluation_year,
+            status=e.status,
+            submitted_at=e.submitted_at
+        )
+        for e in evaluations
+    ]
 
 
 def get_reviewer_weight(reviewer_role: str) -> Decimal:

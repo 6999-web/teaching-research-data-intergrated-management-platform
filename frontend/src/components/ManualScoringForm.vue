@@ -1,37 +1,88 @@
 <template>
   <div class="manual-scoring-form">
-    <el-card class="scoring-card">
-      <template #header>
-        <div class="card-header">
-          <h2>手动评分</h2>
-          <el-tag
-            v-if="currentUserRole"
-            :type="roleTagType"
+    <!-- 标签页导航 -->
+    <el-tabs v-model="activeTab" type="border-card" class="scoring-tabs">
+      <!-- 自评表内容 -->
+      <el-tab-pane label="自评表内容" name="content">
+        <el-card class="content-card" v-loading="contentLoading">
+          <template #header>
+            <h3>教研室自评表内容</h3>
+          </template>
+          <div v-if="selfEvaluationContent" class="evaluation-content">
+            <div v-for="(section, sectionKey) in selfEvaluationContent" :key="sectionKey" class="content-section">
+              <h4 class="section-title">{{ getSectionTitle(sectionKey) }}</h4>
+              <div v-if="typeof section === 'object' && section !== null" class="section-items">
+                <div v-for="(item, itemKey) in section" :key="itemKey" class="content-item">
+                  <div class="item-header">
+                    <span class="item-label">{{ getItemLabel(itemKey) }}</span>
+                    <el-tag v-if="item.selfScore !== undefined" type="success" size="small">
+                      自评分: {{ item.selfScore }}分
+                    </el-tag>
+                  </div>
+                  <div v-if="item.content" class="item-content">{{ item.content }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无自评表内容" />
+        </el-card>
+      </el-tab-pane>
+      <el-tab-pane label="附件材料" name="attachments">
+        <el-card class="attachments-card" v-loading="attachmentsLoading">
+          <template #header>
+            <div class="card-header">
+              <h3>上传的附件材料</h3>
+              <el-tag type="info">共 {{ attachments.length }} 个文件</el-tag>
+            </div>
+          </template>
+          <el-table :data="attachments" stripe style="width: 100%">
+            <el-table-column prop="indicator" label="考核指标" width="150" />
+            <el-table-column prop="file_name" label="文件名" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="file_size" label="文件大小" width="120">
+              <template #default="{ row }">
+                {{ formatFileSize(row.file_size) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="uploaded_at" label="上传时间" width="180">
+              <template #default="{ row }">
+                {{ formatDateTime(row.uploaded_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" link @click="handleDownloadAttachment(row)">
+                  下载
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="attachments.length === 0" description="暂无附件" />
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="手动评分" name="manual-score">
+        <el-card class="scoring-card">
+          <template #header>
+            <div class="card-header">
+              <h2>手动评分</h2>
+              <el-tag v-if="currentUserRole" :type="roleTagType">
+                {{ roleLabel }}
+              </el-tag>
+            </div>
+          </template>
+
+          <!-- Weight Information -->
+          <el-alert v-if="currentUserRole" :title="weightInfo" type="info" :closable="false" show-icon class="weight-alert" />
+
+          <!-- Scoring Form -->
+          <el-form
+            ref="formRef"
+            :model="formData"
+            :rules="rules"
+            label-width="150px"
+            label-position="left"
+            class="scoring-form"
           >
-            {{ roleLabel }}
-          </el-tag>
-        </div>
-      </template>
-
-      <!-- Weight Information -->
-      <el-alert
-        v-if="currentUserRole"
-        :title="weightInfo"
-        type="info"
-        :closable="false"
-        show-icon
-        class="weight-alert"
-      />
-
-      <!-- Scoring Form -->
-      <el-form
-        ref="formRef"
-        :model="formData"
-        :rules="rules"
-        label-width="150px"
-        label-position="left"
-        class="scoring-form"
-      >
         <div
           v-for="indicator in indicators"
           :key="indicator.key"
@@ -107,7 +158,9 @@
           </el-button>
         </el-form-item>
       </el-form>
-    </el-card>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- All Scores Dialog -->
     <el-dialog
@@ -296,7 +349,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
-import { scoringApi } from '@/api/client'
+import { scoringApi, selfEvaluationApi } from '@/api/client'
+import apiClient from '@/api/client'
 import {
   EVALUATION_INDICATORS,
   TOTAL_MAX_SCORE,
@@ -328,6 +382,17 @@ const hasSubmitted = ref(false)
 const allScoresVisible = ref(false)
 const allScoresLoading = ref(false)
 const allScoresData = ref<AllScoresResponse | null>(null)
+
+// Tab state
+const activeTab = ref('content')
+
+// Content tab state
+const contentLoading = ref(false)
+const selfEvaluationContent = ref<any>(null)
+
+// Attachments tab state
+const attachmentsLoading = ref(false)
+const attachments = ref<any[]>([])
 
 // Indicators
 const indicators = EVALUATION_INDICATORS
@@ -425,19 +490,6 @@ function getRoleLabel(role: string): string {
 // Calculate manual total score
 function calculateManualTotalScore(scores: IndicatorScore[]): number {
   return scores.reduce((sum, score) => sum + score.score, 0)
-}
-
-// Format date time
-function formatDateTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
 }
 
 // Handle submit
@@ -566,10 +618,175 @@ const handleViewAllScores = async () => {
   }
 }
 
+// Load self-evaluation content
+const loadSelfEvaluation = async () => {
+  contentLoading.value = true
+  try {
+    const response = await selfEvaluationApi.get(props.evaluationId)
+    selfEvaluationContent.value = response.data.content
+  } catch (error: any) {
+    console.error('Failed to load self-evaluation:', error)
+    ElMessage.error('加载自评表内容失败')
+  } finally {
+    contentLoading.value = false
+  }
+}
+
+// Load attachments
+const loadAttachments = async () => {
+  attachmentsLoading.value = true
+  try {
+    const response = await apiClient.get(`/attachments/${props.evaluationId}`)
+    attachments.value = response.data
+  } catch (error: any) {
+    console.error('Failed to load attachments:', error)
+    ElMessage.error('加载附件列表失败')
+  } finally {
+    attachmentsLoading.value = false
+  }
+}
+
+// Download attachment
+const handleDownloadAttachment = async (attachment: any) => {
+  try {
+    const response = await apiClient.get(`/attachments/${attachment.id}/download`, {
+      responseType: 'blob'
+    })
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', attachment.file_name || 'attachment')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    ElMessage.success('文件下载成功')
+  } catch (error: any) {
+    console.error('Failed to download attachment:', error)
+    ElMessage.error('文件下载失败')
+  }
+}
+
+// Helper: Get section title
+const getSectionTitle = (sectionKey: string): string => {
+  const titles: Record<string, string> = {
+    'section1': '一、教学常规管理',
+    'section2': '二、教学改革与研究',
+    'section3': '三、教学质量与成果',
+    'section4': '四、师资队伍建设',
+    'section5': '五、教学资源建设',
+    // 英文字段名映射
+    'teachingManagement': '教学常规管理',
+    'teachingReform': '教学改革与研究',
+    'teachingQuality': '教学质量与成果',
+    'facultyDevelopment': '师资队伍建设',
+    'teachingResources': '教学资源建设',
+    'positiveList': '正面清单',
+    'negativeList': '负面清单',
+    'regularTeaching': '日常教学',
+    'highlights': '亮点工作',
+    'teachingOfficeId': '教研室编号',
+    'evaluationYear': '考评年度'
+  }
+  return titles[sectionKey] || sectionKey
+}
+
+// Helper: Get item label
+const getItemLabel = (itemKey: string): string => {
+  // 完整的字段名映射
+  const labels: Record<string, string> = {
+    // 正面清单
+    'teachingHonors': '教学荣誉',
+    'teachingCompetitions': '教学竞赛',
+    'innovationCompetitions': '创新创业竞赛',
+    'teachingReformProjects': '教学改革项目',
+    'teachingAchievements': '教学成果',
+    'courseConstruction': '课程建设',
+    'textbookConstruction': '教材建设',
+    'teachingTeamBuilding': '教学团队建设',
+    'facultyTraining': '师资培训',
+    'practiceBaseConstruction': '实践基地建设',
+    'laboratoryConstruction': '实验室建设',
+    'teachingFacilityImprovement': '教学设施改善',
+    // 负面清单
+    'ideologyIssues': '意识形态问题',
+    'ethicsViolations': '师德师风问题',
+    'teachingAccidents': '教学事故',
+    'workloadIncomplete': '工作量不完整',
+    // 教学管理相关
+    'educationResearch': '教育教学研究',
+    'researchAndExchange': '教研与交流',
+    'teacherTeamBuilding': '教师队伍建设',
+    'teachingProcessManagement': '教学过程管理',
+    'teachingQualityManagement': '教学质量管理',
+    'courseAssessment': '课程考核',
+    'regularTeaching': '日常教学',
+    'highlights': '亮点工作',
+    // 基本信息
+    'teachingOfficeId': '教研室编号',
+    'evaluationYear': '考评年度',
+    'submittedAt': '提交时间',
+    'status': '状态',
+    // 其他可能的字段
+    'description': '描述',
+    'content': '内容',
+    'selfScore': '自评分',
+    'evidence': '佐证材料',
+    'remarks': '备注',
+    'summary': '总结',
+    'achievements': '成果',
+    'problems': '存在问题',
+    'improvements': '改进措施',
+    'plans': '工作计划'
+  }
+  
+  // 如果有映射，返回中文
+  if (labels[itemKey]) {
+    return labels[itemKey]
+  }
+  
+  // 尝试从 item1_1 格式提取
+  const match = itemKey.match(/item(\d+)_(\d+)/)
+  if (match) {
+    return `${match[1]}.${match[2]}`
+  }
+  
+  // 返回原始key
+  return itemKey
+}
+
+// Helper: Format file size
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// Helper: Format date time
+const formatDateTime = (dateStr: string): string => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
 // Check if user has already submitted on mount
 onMounted(async () => {
-  // Optionally load all scores to check if user has submitted
-  // This can be done by calling handleViewAllScores silently
+  // Load all data for the tabs
+  await Promise.all([
+    loadSelfEvaluation(),
+    loadAttachments()
+  ])
 })
 
 // Expose methods
@@ -582,13 +799,96 @@ defineExpose({
 
 <style scoped>
 .manual-scoring-form {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.scoring-tabs {
+  margin-bottom: 20px;
+}
+
+.scoring-tabs :deep(.el-tabs__content) {
+  padding: 0;
 }
 
 .scoring-card {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Content Tab Styles */
+.content-card {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.content-card h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
+}
+
+.evaluation-content {
+  padding: 10px 0;
+}
+
+.content-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f9fafc;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.section-title {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.content-item {
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.item-label {
+  font-weight: 600;
+  color: #606266;
+  font-size: 14px;
+}
+
+.item-content {
+  color: #303133;
+  line-height: 1.6;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+/* Attachments Tab Styles */
+.attachments-card {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.attachments-card h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
 }
 
 .card-header {

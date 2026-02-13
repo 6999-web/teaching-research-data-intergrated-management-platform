@@ -1,6 +1,5 @@
 from app.schemas.auth import LoginRequest, LoginResponse, TokenData
 from app.schemas.self_evaluation import (
-    SelfEvaluationContent,
     SelfEvaluationCreate,
     SelfEvaluationUpdate,
     SelfEvaluationResponse,
@@ -52,7 +51,6 @@ __all__ = [
     "LoginRequest",
     "LoginResponse",
     "TokenData",
-    "SelfEvaluationContent",
     "SelfEvaluationCreate",
     "SelfEvaluationUpdate",
     "SelfEvaluationResponse",

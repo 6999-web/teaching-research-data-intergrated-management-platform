@@ -13,6 +13,7 @@ class LoginResponse(BaseModel):
     userId: str
     role: str
     expiresIn: int
+    teachingOfficeId: str | None = None
 
 
 class TokenData(BaseModel):

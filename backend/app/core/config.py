@@ -5,15 +5,17 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "教研室工作考评系统"
     API_V1_STR: str = "/api"
     
-    # Database - 使用 SQLite
-    DATABASE_URL: str = "sqlite:///./teaching_office_evaluation.db"
+    # MySQL 数据库配置
+    MYSQL_SERVER: str = "localhost"
+    MYSQL_USER: str = "root"
+    MYSQL_PASSWORD: str = "your_password"
+    MYSQL_DB: str = "teaching_office_evaluation"
+    MYSQL_PORT: int = 3306
     
-    # PostgreSQL 配置（备用）
-    POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "teaching_office_evaluation"
-    POSTGRES_PORT: int = 5432
+    # 数据库连接URL（自动生成）
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_SERVER}:{self.MYSQL_PORT}/{self.MYSQL_DB}?charset=utf8mb4"
     
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"

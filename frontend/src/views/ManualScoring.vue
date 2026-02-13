@@ -23,15 +23,16 @@
           stripe
           style="width: 100%"
           class="evaluation-table"
+          v-loading="loading"
           @row-click="handleSelectEvaluation"
         >
           <el-table-column
-            prop="teachingOfficeName"
+            prop="teaching_office_name"
             label="教研室名称"
             width="200"
           />
           <el-table-column
-            prop="evaluationYear"
+            prop="evaluation_year"
             label="考评年度"
             width="120"
           />
@@ -47,12 +48,12 @@
             </template>
           </el-table-column>
           <el-table-column
-            prop="submittedAt"
+            prop="submitted_at"
             label="提交时间"
             width="180"
           >
             <template #default="scope">
-              {{ scope.row.submittedAt ? formatDate(scope.row.submittedAt) : '-' }}
+              {{ scope.row.submitted_at ? formatDate(scope.row.submitted_at) : '-' }}
             </template>
           </el-table-column>
           <el-table-column
@@ -86,11 +87,11 @@
           <div class="evaluation-info">
             <div class="info-item">
               <span class="label">教研室：</span>
-              <span class="value">{{ selectedEvaluation?.teachingOfficeName }}</span>
+              <span class="value">{{ selectedEvaluation?.teaching_office_name }}</span>
             </div>
             <div class="info-item">
               <span class="label">考评年度：</span>
-              <span class="value">{{ selectedEvaluation?.evaluationYear }}</span>
+              <span class="value">{{ selectedEvaluation?.evaluation_year }}</span>
             </div>
             <div class="info-item">
               <span class="label">状态：</span>
@@ -123,14 +124,16 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import ManualScoringForm from '@/components/ManualScoringForm.vue'
+import { scoringApi } from '@/api/client'
 
-// Mock data - In real implementation, this would come from API
+// Evaluation interface
 interface Evaluation {
   id: string
-  teachingOfficeName: string
-  evaluationYear: number
+  teaching_office_id: string
+  teaching_office_name: string
+  evaluation_year: number
   status: string
-  submittedAt?: string
+  submitted_at?: string
 }
 
 // State
@@ -138,6 +141,7 @@ const evaluations = ref<Evaluation[]>([])
 const selectedEvaluationId = ref<string>('')
 const selectedEvaluation = ref<Evaluation | null>(null)
 const currentUserRole = ref<'evaluation_team' | 'evaluation_office'>('evaluation_team')
+const loading = ref(false)
 
 // Load evaluations on mount
 onMounted(async () => {
@@ -145,32 +149,19 @@ onMounted(async () => {
   loadCurrentUserRole()
 })
 
-// Load evaluations
+// Load evaluations from API
 const loadEvaluations = async () => {
-  // Mock data - Replace with actual API call
-  evaluations.value = [
-    {
-      id: '1',
-      teachingOfficeName: '计算机科学教研室',
-      evaluationYear: 2024,
-      status: 'ai_scored',
-      submittedAt: '2024-01-15T10:30:00'
-    },
-    {
-      id: '2',
-      teachingOfficeName: '数学教研室',
-      evaluationYear: 2024,
-      status: 'ai_scored',
-      submittedAt: '2024-01-16T14:20:00'
-    },
-    {
-      id: '3',
-      teachingOfficeName: '物理教研室',
-      evaluationYear: 2024,
-      status: 'manually_scored',
-      submittedAt: '2024-01-17T09:15:00'
-    }
-  ]
+  try {
+    loading.value = true
+    // 不传status参数，后端会默认返回 locked 和 ai_scored 状态的自评表
+    const response = await scoringApi.getEvaluationsForScoring({})
+    evaluations.value = response.data
+  } catch (error: any) {
+    console.error('Failed to load evaluations:', error)
+    ElMessage.error(error.response?.data?.detail || '加载待评分列表失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 // Load current user role

@@ -296,7 +296,9 @@ const indicators = INDICATORS
 
 // Computed
 const uploadAction = computed(() => {
-  return `/api/teaching-office/attachments`
+  // 使用完整的API URL
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+  return `${baseURL}/teaching-office/attachments`
 })
 
 const uploadHeaders = computed(() => {
@@ -308,7 +310,7 @@ const uploadHeaders = computed(() => {
 
 const uploadData = computed(() => {
   return {
-    evaluationId: props.evaluationId,
+    evaluation_id: props.evaluationId,
     indicator: uploadForm.indicator
   }
 })
@@ -380,10 +382,37 @@ const handleSuccess: UploadProps['onSuccess'] = (response, file) => {
     uploadingFile.status = 'success'
   }
 
-  // Add to uploaded attachments
-  if (response.attachmentIds && response.attachmentIds.length > 0) {
-    // Fetch the uploaded attachment details
-    fetchAttachmentDetails(response.attachmentIds[0])
+  // Add to uploaded attachments directly
+  if (response.attachment_ids && response.attachment_ids.length > 0) {
+    // 直接添加附件信息到列表
+    uploadedAttachments.value.push({
+      id: response.attachment_ids[0],
+      evaluation_id: props.evaluationId,
+      indicator: uploadForm.indicator,
+      fileName: file.name,
+      fileSize: file.size || 0,
+      fileType: file.type || 'application/octet-stream',
+      storage_path: '',
+      classified_by: 'user',
+      uploadedAt: new Date().toISOString(),
+      is_archived: true,
+      archived_at: new Date().toISOString()
+    } as Attachment)
+  } else if (response.attachmentIds && response.attachmentIds.length > 0) {
+    // 兼容驼峰命名
+    uploadedAttachments.value.push({
+      id: response.attachmentIds[0],
+      evaluation_id: props.evaluationId,
+      indicator: uploadForm.indicator,
+      fileName: file.name,
+      fileSize: file.size || 0,
+      fileType: file.type || 'application/octet-stream',
+      storage_path: '',
+      classified_by: 'user',
+      uploadedAt: new Date().toISOString(),
+      is_archived: true,
+      archived_at: new Date().toISOString()
+    } as Attachment)
   }
 
   ElMessage.success(`文件 ${file.name} 上传成功`)
