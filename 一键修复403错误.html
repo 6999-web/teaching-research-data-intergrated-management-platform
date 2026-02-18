@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一键修复403错误</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .step {
+            background: #f5f7fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .step-title {
+            color: #667eea;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .step-desc {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .log {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .log-line {
+            margin-bottom: 5px;
+        }
+
+        .log-line.success {
+            color: #48bb78;
+        }
+
+        .log-line.error {
+            color: #f56565;
+        }
+
+        .log-line.warning {
+            color: #ed8936;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 一键修复403错误</h1>
+        <p class="subtitle">自动诊断并修复教研室端提交问题</p>
+
+        <div class="step">
+            <div class="step-title">步骤1：清除浏览器数据</div>
+            <div class="step-desc">清除localStorage、sessionStorage和cookies</div>
+            <button class="btn" onclick="clearBrowserData()">清除数据</button>
+            <div id="step1-status"></div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">步骤2：验证后端服务</div>
+            <div class="step-desc">检查后端API是否正常运行</div>
+            <button class="btn" onclick="checkBackend()">检查后端</button>
+            <div id="step2-status"></div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">步骤3：测试登录</div>
+            <div class="step-desc">使用测试账号登录并获取token</div>
+            <button class="btn" onclick="testLogin()">测试登录</button>
+            <div id="step3-status"></div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">步骤4：测试API访问</div>
+            <div class="step-desc">测试保存自评表API是否可以访问</div>
+            <button class="btn" onclick="testAPI()" id="testAPIBtn" disabled>测试API</button>
+            <div id="step4-status"></div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">步骤5：跳转到系统</div>
+            <div class="step-desc">所有检查通过后，跳转到教研室端</div>
+            <button class="btn" onclick="goToSystem()" id="goToSystemBtn" disabled>进入系统</button>
+        </div>
+
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        let currentToken = '';
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(line);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showStatus(stepId, message, type) {
+            const statusDiv = document.getElementById(`step${stepId}-status`);
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        function clearBrowserData() {
+            try {
+                log('开始清除浏览器数据...', 'info');
+                
+                // 清除localStorage
+                localStorage.clear();
+                log('✓ localStorage已清除', 'success');
+                
+                // 清除sessionStorage
+                sessionStorage.clear();
+                log('✓ sessionStorage已清除', 'success');
+                
+                // 清除cookies
+                document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                });
+                log('✓ Cookies已清除', 'success');
+                
+                showStatus(1, '✓ 浏览器数据已清除', 'success');
+                log('浏览器数据清除完成', 'success');
+            } catch (error) {
+                log(`✗ 清除失败: ${error.message}`, 'error');
+                showStatus(1, '✗ 清除失败', 'error');
+            }
+        }
+
+        async function checkBackend() {
+            try {
+                log('检查后端服务...', 'info');
+                showStatus(2, '正在检查...', 'info');
+                
+                const response = await fetch('/api/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✓ 后端服务正常: ${JSON.stringify(data)}`, 'success');
+                    showStatus(2, '✓ 后端服务正常', 'success');
+                } else {
+                    log(`✗ 后端响应异常: ${response.status}`, 'error');
+                    showStatus(2, `✗ 后端响应异常: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ 无法连接后端: ${error.message}`, 'error');
+                showStatus(2, '✗ 无法连接后端，请确保后端服务已启动', 'error');
+            }
+        }
+
+        async function testLogin() {
+            try {
+                log('测试登录...', 'info');
+                showStatus(3, '正在登录...', 'info');
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'office1',
+                        password: 'password123',
+                        role: 'teaching_office'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentToken = data.token;
+                    
+                    // 保存到localStorage
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('userName', 'office1');
+                    localStorage.setItem('userRole', data.role);
+                    if (data.teachingOfficeId) {
+                        localStorage.setItem('teachingOfficeId', data.teachingOfficeId);
+                    }
+                    
+                    log(`✓ 登录成功`, 'success');
+                    log(`  Token: ${data.token.substring(0, 20)}...`, 'success');
+                    log(`  User ID: ${data.userId}`, 'success');
+                    log(`  Role: ${data.role}`, 'success');
+                    showStatus(3, '✓ 登录成功', 'success');
+                    
+                    // 启用测试API按钮
+                    document.getElementById('testAPIBtn').disabled = false;
+                } else {
+                    const error = await response.json();
+                    log(`✗ 登录失败: ${error.detail || response.statusText}`, 'error');
+                    showStatus(3, `✗ 登录失败: ${error.detail || response.statusText}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ 登录请求失败: ${error.message}`, 'error');
+                showStatus(3, '✗ 登录请求失败', 'error');
+            }
+        }
+
+        async function testAPI() {
+            try {
+                log('测试API访问...', 'info');
+                showStatus(4, '正在测试...', 'info');
+                
+                const teachingOfficeId = localStorage.getItem('teachingOfficeId') || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111';
+                
+                const response = await fetch('/api/teaching-office/self-evaluation', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        teaching_office_id: teachingOfficeId,
+                        evaluation_year: 2026,
+                        content: {
+                            test: 'test'
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✓ API访问成功`, 'success');
+                    log(`  Evaluation ID: ${data.evaluation_id}`, 'success');
+                    log(`  Status: ${data.status}`, 'success');
+                    showStatus(4, '✓ API访问正常', 'success');
+                    
+                    // 启用进入系统按钮
+                    document.getElementById('goToSystemBtn').disabled = false;
+                } else {
+                    const error = await response.json();
+                    log(`✗ API访问失败: ${response.status} - ${error.detail || response.statusText}`, 'error');
+                    showStatus(4, `✗ API访问失败: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ API请求失败: ${error.message}`, 'error');
+                showStatus(4, '✗ API请求失败', 'error');
+            }
+        }
+
+        function goToSystem() {
+            log('跳转到教研室端...', 'success');
+            setTimeout(() => {
+                window.location.href = '/teaching-office-home';
+            }, 1000);
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('='.repeat(50), 'info');
+            log('教研室端403错误诊断工具', 'info');
+            log('='.repeat(50), 'info');
+            log('请按顺序点击各步骤的按钮进行诊断', 'info');
+        };
+    </script>
+</body>
+</html>
