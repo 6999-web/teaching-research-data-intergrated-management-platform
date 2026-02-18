@@ -171,14 +171,6 @@
           >
             上传附件
           </el-button>
-          <el-button 
-            v-if="showAIScoringButton" 
-            type="warning" 
-            :loading="aiScoringLoading"
-            @click="handleTriggerAIScoring"
-          >
-            触发AI评分
-          </el-button>
           <el-button @click="handleReset">
             重置
           </el-button>
@@ -309,15 +301,7 @@ const saving = ref(false)
 const previewVisible = ref(false)
 const isSubmitted = ref(false)
 const hasAttachments = ref(false)
-const aiScoringLoading = ref(false)
 const evaluationStatus = ref<string>('draft')
-
-// Computed: Show AI scoring button only when form and attachments are both submitted
-const showAIScoringButton = computed(() => {
-  return props.evaluationId && 
-         evaluationStatus.value === 'locked' && 
-         hasAttachments.value
-})
 
 // Load evaluation status on mount
 onMounted(async () => {
@@ -342,7 +326,7 @@ const checkEvaluationStatus = async () => {
     const evaluation = response.data
     
     evaluationStatus.value = evaluation.status
-    isSubmitted.value = evaluation.status === 'locked' || evaluation.status === 'submitted'
+    isSubmitted.value = evaluation.status === 'submitted'
     
     // Check if has attachments (this would need to be implemented in the API)
     // For now, assume if status is locked, attachments exist
@@ -526,9 +510,9 @@ const handleSubmit = async () => {
     const response = await selfEvaluationApi.submit(props.evaluationId)
     
     isSubmitted.value = true
-    evaluationStatus.value = 'locked'
+    evaluationStatus.value = 'submitted'
     
-    ElMessage.success(response.data.message || '提交成功，表单已锁定')
+    ElMessage.success(response.data.message || '提交成功')
     emit('submit', props.evaluationId)
     
     // Refresh status
@@ -538,60 +522,6 @@ const handleSubmit = async () => {
       console.error('Submit failed:', error)
       ElMessage.error(error.response?.data?.detail || '提交失败，请重试')
     }
-  }
-}
-
-// Handle trigger AI scoring
-const handleTriggerAIScoring = async () => {
-  if (!props.evaluationId) {
-    ElMessage.warning('无法触发AI评分：缺少评估ID')
-    return
-  }
-
-  try {
-    // Confirm trigger
-    await ElMessageBox.confirm(
-      '确定要触发AI评分吗？AI将自动解析自评表和附件进行评分。',
-      '确认触发AI评分',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'info',
-      }
-    )
-    
-    aiScoringLoading.value = true
-    
-    // Call API to trigger AI scoring
-    const response = await selfEvaluationApi.triggerAIScoring(props.evaluationId)
-    
-    ElMessage.success({
-      message: response.data.message || 'AI评分任务已启动，正在后台处理中...',
-      duration: 5000,
-      showClose: true
-    })
-    
-    emit('aiScoringTriggered', props.evaluationId)
-    
-    // Optionally refresh status after a delay
-    setTimeout(async () => {
-      await checkEvaluationStatus()
-    }, 2000)
-    
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      console.error('Trigger AI scoring failed:', error)
-      
-      const errorMessage = error.response?.data?.detail || 'AI评分触发失败，请重试'
-      
-      ElMessage.error({
-        message: errorMessage,
-        duration: 5000,
-        showClose: true
-      })
-    }
-  } finally {
-    aiScoringLoading.value = false
   }
 }
 

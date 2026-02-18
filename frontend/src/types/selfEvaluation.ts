@@ -15,7 +15,7 @@ export interface SelfEvaluation {
   teachingOfficeId: string;
   evaluationYear: number;
   content: SelfEvaluationContent;
-  status: 'draft' | 'submitted' | 'locked' | 'ai_scored' | 'manually_scored' | 'finalized' | 'published';
+  status: 'draft' | 'submitted' | 'locked' | 'ai_scored' | 'manually_scored' | 'ready_for_final' | 'finalized' | 'published';
   submittedAt?: string;
   createdAt?: string;
   updatedAt?: string;

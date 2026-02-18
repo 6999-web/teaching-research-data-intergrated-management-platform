@@ -12,3 +12,4 @@ from .college import College
 from .improvement_plan import ImprovementPlan
 from .anomaly import Anomaly
 from .approval import Approval
+from .publication import Publication

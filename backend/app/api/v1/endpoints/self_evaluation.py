@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 from datetime import datetime
 
-from app.core.deps import get_db, get_current_user
+from app.core.deps import get_db, get_current_user, RoleChecker
 from app.models.user import User
 from app.models.self_evaluation import SelfEvaluation
 from app.models.attachment import Attachment
@@ -26,46 +26,23 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Role checker for teaching office endpoints
+# 允许教研室端的所有角色访问：teaching_office, director, teacher
+require_teaching_office = RoleChecker(["teaching_office", "director", "teacher"])
+
 
 @router.post("/self-evaluation", response_model=SelfEvaluationSaveResponse, status_code=status.HTTP_201_CREATED)
 def create_self_evaluation(
     evaluation_data: SelfEvaluationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teaching_office),
 ):
     """
-    创建或更新自评表
+    创建自评表
     
-    - 如果该教研室和年份的自评表已存在，则更新内容
-    - 如果不存在，则创建新的自评表
+    - 每年可以提交多次考评表，每次创建新记录
     - 状态默认为 'draft'
     """
-    # 检查是否已存在该教研室和年份的自评表
-    existing_evaluation = db.query(SelfEvaluation).filter(
-        SelfEvaluation.teaching_office_id == evaluation_data.teaching_office_id,
-        SelfEvaluation.evaluation_year == evaluation_data.evaluation_year
-    ).first()
-    
-    if existing_evaluation:
-        # 检查是否已锁定
-        if existing_evaluation.status == "locked":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="自评表已锁定，无法修改"
-            )
-        
-        # 更新现有自评表
-        existing_evaluation.content = evaluation_data.content
-        existing_evaluation.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(existing_evaluation)
-        
-        return SelfEvaluationSaveResponse(
-            evaluation_id=existing_evaluation.id,
-            status=existing_evaluation.status,
-            created_at=existing_evaluation.created_at
-        )
-    
     # 创建新的自评表
     new_evaluation = SelfEvaluation(
         teaching_office_id=evaluation_data.teaching_office_id,
@@ -96,6 +73,7 @@ def get_self_evaluation(
     
     - 根据自评表ID查询
     - 返回完整的自评表信息
+    - 教研室和管理端都可以查看
     """
     evaluation = db.query(SelfEvaluation).filter(
         SelfEvaluation.id == evaluation_id
@@ -115,7 +93,7 @@ def update_self_evaluation(
     evaluation_id: UUID,
     evaluation_data: SelfEvaluationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teaching_office),
 ):
     """
     更新自评表
@@ -171,16 +149,13 @@ def update_self_evaluation(
 def submit_self_evaluation(
     evaluation_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teaching_office),
 ):
     """
     提交自评表
     
-    - 检查自评表和附件是否都已完成
-    - 如果都已完成，则自动锁定表单和附件
-    - 更新状态为 'locked'
-    
-    需求: 2.6
+    - 检查自评表是否存在
+    - 更新状态为 'submitted'（不锁定，可继续修改）
     """
     evaluation = db.query(SelfEvaluation).filter(
         SelfEvaluation.id == evaluation_id
@@ -192,34 +167,27 @@ def submit_self_evaluation(
             detail="自评表不存在"
         )
     
-    # 检查是否已经锁定
-    if evaluation.status == "locked":
+    # 检查是否已经提交
+    if evaluation.status == "submitted":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="自评表已经提交并锁定"
+            detail="自评表已经提交"
         )
     
-    # 检查是否有附件（可选，不强制要求）
+    # 检查附件数量
     attachments_count = db.query(Attachment).filter(
         Attachment.evaluation_id == evaluation_id
     ).count()
     
-    # 注意：附件不是必需的，允许没有附件的情况下提交
-    # if attachments_count == 0:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="请先上传附件后再提交"
-    #     )
-    
-    # 更新状态为 locked
-    evaluation.status = "locked"
+    # 更新状态为 submitted（不锁定）
+    evaluation.status = "submitted"
     evaluation.submitted_at = datetime.utcnow()
     evaluation.updated_at = datetime.utcnow()
     
     db.commit()
     db.refresh(evaluation)
     
-    # 记录操作日志 - 需求 17.1
+    # 记录操作日志
     try:
         log_operation(
             db=db,
@@ -230,7 +198,7 @@ def submit_self_evaluation(
             target_id=evaluation.id,
             target_type="self_evaluation",
             details={
-                "action": "submit_and_lock",
+                "action": "submit",
                 "evaluation_id": str(evaluation.id),
                 "teaching_office_id": str(evaluation.teaching_office_id),
                 "evaluation_year": evaluation.evaluation_year,
@@ -244,7 +212,7 @@ def submit_self_evaluation(
         evaluation_id=evaluation.id,
         status=evaluation.status,
         submitted_at=evaluation.submitted_at,
-        message="自评表和附件已成功提交并锁定"
+        message="自评表已成功提交到考评小组"
     )
 
 
@@ -343,7 +311,7 @@ async def trigger_ai_scoring(
     request: TriggerAIScoringRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teaching_office),
 ):
     """
     触发AI评分

@@ -92,11 +92,17 @@ class RoleChecker:
         Raises:
             HTTPException: 403 if user doesn't have required role
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"RoleChecker: Checking user {current_user.username} with role {current_user.role} against allowed roles {self.allowed_roles}")
+        
         if current_user.role not in self.allowed_roles:
+            logger.error(f"RoleChecker: Access denied for user {current_user.username}. Role {current_user.role} not in {self.allowed_roles}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied. Required roles: {', '.join(self.allowed_roles)}. Your role: {current_user.role}"
             )
+        logger.info(f"RoleChecker: Access granted for user {current_user.username}")
         return current_user
 
 

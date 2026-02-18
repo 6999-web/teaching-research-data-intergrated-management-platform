@@ -113,6 +113,7 @@
           :evaluation-id="selectedEvaluationId"
           :current-user-role="currentUserRole"
           @submitted="handleScoreSubmitted"
+          @submitted-to-office="handleSubmittedToOffice"
         />
       </div>
     </div>
@@ -155,7 +156,19 @@ const loadEvaluations = async () => {
     loading.value = true
     // 不传status参数，后端会默认返回 locked 和 ai_scored 状态的自评表
     const response = await scoringApi.getEvaluationsForScoring({})
-    evaluations.value = response.data
+    
+    // 处理不同的响应数据结构
+    if (Array.isArray(response.data)) {
+      evaluations.value = response.data
+    } else if (response.data.value && Array.isArray(response.data.value)) {
+      // PowerShell返回的数据结构包含value字段
+      evaluations.value = response.data.value
+    } else {
+      evaluations.value = []
+      console.warn('Unexpected response data structure:', response.data)
+    }
+    
+    console.log('Loaded evaluations:', evaluations.value.length)
   } catch (error: any) {
     console.error('Failed to load evaluations:', error)
     ElMessage.error(error.response?.data?.detail || '加载待评分列表失败')
@@ -195,6 +208,17 @@ const handleScoreSubmitted = (scoreRecordId: string) => {
   }, 1000)
 }
 
+// Handle submitted to office
+const handleSubmittedToOffice = (evaluationId: string) => {
+  console.log('Submitted to office:', evaluationId)
+  
+  // Reload evaluations and go back to list
+  setTimeout(() => {
+    loadEvaluations()
+    handleBackToList()
+  }, 1000)
+}
+
 // Get status tag type
 const getStatusTagType = (status: string): string => {
   const types: Record<string, string> = {
@@ -203,6 +227,7 @@ const getStatusTagType = (status: string): string => {
     'locked': 'warning',
     'ai_scored': 'success',
     'manually_scored': 'primary',
+    'ready_for_final': 'warning',
     'finalized': 'danger',
     'published': 'success'
   }
@@ -217,6 +242,7 @@ const getStatusLabel = (status: string): string => {
     'locked': '已锁定',
     'ai_scored': 'AI已评分',
     'manually_scored': '已手动评分',
+    'ready_for_final': '待最终确定',
     'finalized': '已确定最终得分',
     'published': '已公示'
   }

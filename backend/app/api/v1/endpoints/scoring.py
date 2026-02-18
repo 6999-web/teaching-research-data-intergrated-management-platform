@@ -5,7 +5,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
-from app.core.deps import get_db, require_management_roles
+from app.core.deps import get_db, require_management_roles, RoleChecker, get_current_user
 from app.models.user import User
 from app.models.manual_score import ManualScore
 from app.models.ai_score import AIScore
@@ -70,11 +70,11 @@ def get_evaluations_for_scoring(
         TeachingOffice, SelfEvaluation.teaching_office_id == TeachingOffice.id
     )
     
-    # Filter by status - default to locked and ai_scored
+    # Filter by status - default to submitted, ai_scored, and manually_scored
     if status:
         query = query.filter(SelfEvaluation.status == status)
     else:
-        query = query.filter(SelfEvaluation.status.in_(["locked", "ai_scored"]))
+        query = query.filter(SelfEvaluation.status.in_(["submitted", "ai_scored", "manually_scored", "ready_for_final"]))
     
     # Filter by year
     if year:
@@ -103,10 +103,12 @@ def get_reviewer_weight(reviewer_role: str) -> Decimal:
     Get weight for reviewer based on role.
     
     考评小组 (evaluation_team) has higher weight than 考评办公室 (evaluation_office).
+    evaluator has same weight as evaluation_team.
     """
     weights = {
         "evaluation_team": Decimal("0.70"),  # 考评小组权重更高
         "evaluation_office": Decimal("0.50"),
+        "evaluator": Decimal("0.70"),  # evaluator has same weight as evaluation_team
     }
     return weights.get(reviewer_role, Decimal("0.50"))
 
@@ -115,14 +117,14 @@ def get_reviewer_weight(reviewer_role: str) -> Decimal:
 def submit_manual_score(
     score_data: ManualScoreCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_management_roles)
+    current_user: User = Depends(RoleChecker(["evaluation_team", "evaluation_office", "evaluator"]))
 ):
     """
     提交手动评分 (Submit manual score).
     
     需求: 6.1, 6.2, 6.3, 6.4, 6.7
     
-    - 仅考评小组和考评办公室可以提交评分
+    - 仅考评小组、考评办公室和evaluator可以提交评分
     - 评分记录一旦提交不可删除和修改
     - 保留评审人的原始打分记录
     - 考评小组评分权重高于考评办公室
@@ -167,6 +169,12 @@ def submit_manual_score(
     )
     
     db.add(manual_score)
+    
+    # Update evaluation status to manually_scored if it was ai_scored
+    if evaluation.status == "ai_scored":
+        evaluation.status = "manually_scored"
+        evaluation.updated_at = datetime.utcnow()
+    
     db.commit()
     db.refresh(manual_score)
     
@@ -196,6 +204,49 @@ def submit_manual_score(
         score_record_id=manual_score.id,
         submitted_at=manual_score.submitted_at
     )
+
+
+@router.post("/{evaluation_id}/submit-to-office", response_model=dict)
+def submit_to_evaluation_office(
+    evaluation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker(["evaluation_team"]))
+):
+    """
+    考评小组提交到考评办公室 (Submit to evaluation office).
+    
+    - 考评小组评分完成后，提交到考评办公室
+    - 将状态从 ai_scored 或 manually_scored 改为 ready_for_final
+    - 仅考评小组可以执行此操作
+    """
+    evaluation = db.query(SelfEvaluation).filter(
+        SelfEvaluation.id == evaluation_id
+    ).first()
+    
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Evaluation with id {evaluation_id} not found"
+        )
+    
+    valid_statuses = ["ai_scored", "manually_scored"]
+    if evaluation.status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Evaluation status must be in {valid_statuses}, current status: {evaluation.status}"
+        )
+    
+    evaluation.status = "ready_for_final"
+    evaluation.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(evaluation)
+    
+    return {
+        "evaluation_id": evaluation_id,
+        "status": evaluation.status,
+        "message": "已提交到考评办公室"
+    }
 
 
 @router.get("/all-scores/{evaluation_id}", response_model=AllScoresResponse)

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 import os
 
-from app.core.deps import get_db, get_current_user
+from app.core.deps import get_db, get_current_user, RoleChecker
 from app.models.user import User
 from app.models.attachment import Attachment
 from app.models.self_evaluation import SelfEvaluation
@@ -22,6 +22,10 @@ from app.services.minio_service import minio_service
 
 router = APIRouter()
 
+# Role checkers
+require_teaching_office = RoleChecker(["teaching_office"])
+require_management_roles = RoleChecker(["evaluation_team", "evaluation_office"])
+
 
 @router.post("/attachments", response_model=AttachmentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_attachments(
@@ -29,7 +33,7 @@ async def upload_attachments(
     indicator: str = Form(..., description="考核指标"),
     files: List[UploadFile] = File(..., description="上传的文件列表"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teaching_office),
 ):
     """
     上传附件
@@ -177,7 +181,7 @@ def query_attachments(
     evaluation_year: Optional[int] = Query(None, description="按考核年度筛选"),
     is_archived: Optional[bool] = Query(None, description="按归档状态筛选"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_management_roles),
 ):
     """
     查询附件（支持多条件筛选）
@@ -278,12 +282,17 @@ async def download_attachment(
             detail="无法获取文件，请稍后重试"
         )
     
+    from urllib.parse import quote
+    
+    # 对文件名进行URL编码以支持中文文件名
+    encoded_filename = quote(attachment.file_name, encoding='utf-8')
+    
     # 返回文件流响应
     return StreamingResponse(
         file_stream,
         media_type=attachment.file_type or "application/octet-stream",
         headers={
-            "Content-Disposition": f'attachment; filename="{attachment.file_name}"',
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Content-Length": str(attachment.file_size)
         }
     )
@@ -294,7 +303,7 @@ def update_attachment_classification(
     attachment_id: UUID,
     classification_update: AttachmentClassificationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_management_roles),
 ):
     """
     管理端调整附件分类标签

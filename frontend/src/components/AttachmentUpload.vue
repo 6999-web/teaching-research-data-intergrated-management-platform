@@ -96,7 +96,7 @@
               ref="uploadRef"
               :action="uploadAction"
               :headers="uploadHeaders"
-              :data="uploadData"
+              :http-request="customUpload"
               :multiple="true"
               :file-list="fileList"
               :on-preview="handlePreview"
@@ -308,6 +308,7 @@ const uploadHeaders = computed(() => {
   }
 })
 
+// 不使用:data属性，改用http-request自定义上传
 const uploadData = computed(() => {
   return {
     evaluation_id: props.evaluationId,
@@ -333,6 +334,65 @@ const handleIndicatorChange = () => {
   // Clear file list when indicator changes
   fileList.value = []
   uploadRef.value?.clearFiles()
+}
+
+// 自定义上传方法
+const customUpload = async (options: any) => {
+  const { file, onProgress, onSuccess, onError } = options
+  
+  if (!uploadForm.indicator) {
+    ElMessage.error('请先选择考核指标')
+    onError(new Error('请先选择考核指标'))
+    return
+  }
+  
+  try {
+    // 创建FormData
+    const formData = new FormData()
+    formData.append('evaluation_id', props.evaluationId)
+    formData.append('indicator', uploadForm.indicator)
+    formData.append('files', file)
+    
+    // 获取token
+    const token = localStorage.getItem('token')
+    
+    // 发送请求
+    const xhr = new XMLHttpRequest()
+    
+    // 监听上传进度
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.floor((e.loaded / e.total) * 100)
+        onProgress({ percent })
+      }
+    })
+    
+    // 监听完成
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 201) {
+        const response = JSON.parse(xhr.responseText)
+        onSuccess(response)
+      } else {
+        const error = JSON.parse(xhr.responseText)
+        onError(new Error(error.detail || '上传失败'))
+      }
+    })
+    
+    // 监听错误
+    xhr.addEventListener('error', () => {
+      onError(new Error('网络错误'))
+    })
+    
+    // 发送请求
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+    xhr.open('POST', `${baseURL}/teaching-office/attachments`)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.send(formData)
+    
+  } catch (error) {
+    console.error('Upload error:', error)
+    onError(error)
+  }
 }
 
 const beforeUpload: UploadProps['beforeUpload'] = (file) => {
@@ -457,7 +517,7 @@ const handleExceed: UploadProps['onExceed'] = (files) => {
 
 const fetchAttachmentDetails = async (attachmentId: string) => {
   try {
-    const response = await apiClient.get(`/attachments/${attachmentId}`)
+    const response = await apiClient.get(`/teaching-office/attachments/${attachmentId}`)
     uploadedAttachments.value.push(response.data)
   } catch (error) {
     console.error('Failed to fetch attachment details:', error)
@@ -477,7 +537,7 @@ const handleDelete = async (attachment: Attachment) => {
     )
 
     // Call API to delete attachment
-    await apiClient.delete(`/attachments/${attachment.id}`)
+    await apiClient.delete(`/teaching-office/attachments/${attachment.id}`)
 
     // Remove from list
     const index = uploadedAttachments.value.findIndex(a => a.id === attachment.id)

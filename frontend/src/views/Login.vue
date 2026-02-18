@@ -230,6 +230,9 @@ const handleLogin = async () => {
           user: user
         })
         
+        console.log('Login successful, user data:', user)
+        console.log('Token saved:', data.token)
+        
         ElMessage.success('登录成功！')
         showLoginDialog.value = false
         

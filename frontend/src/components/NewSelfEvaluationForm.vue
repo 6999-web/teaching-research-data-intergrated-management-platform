@@ -670,15 +670,121 @@
           </el-descriptions>
         </el-card>
 
+        <!-- 附件上传区域 -->
+        <el-divider content-position="left">
+          <h3 class="section-title">附件上传（可选）</h3>
+        </el-divider>
+
+        <el-card class="attachment-card">
+          <el-alert
+            title="提示"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px;"
+          >
+            您可以在填写表单的同时上传相关附件。附件上传是可选的，也可以稍后单独上传。
+          </el-alert>
+
+          <el-form-item label="选择考核指标" required>
+            <el-select
+              v-model="attachmentForm.indicator"
+              placeholder="请选择考核指标"
+              style="width: 100%"
+              @change="handleIndicatorChange"
+            >
+              <el-option
+                v-for="indicator in attachmentIndicators"
+                :key="indicator.key"
+                :label="indicator.label"
+                :value="indicator.key"
+              >
+                <span>{{ indicator.label }}</span>
+                <span style="float: right; color: #8492a6; font-size: 13px">
+                  {{ indicator.category === 'certificate' ? '证书类' : '项目类' }}
+                </span>
+              </el-option>
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="上传文件">
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :multiple="true"
+              :file-list="attachmentFileList"
+              :on-change="handleFileChange"
+              :on-remove="handleFileRemove"
+              :accept="acceptedFileTypes"
+              :limit="10"
+              :on-exceed="handleExceed"
+              drag
+              class="upload-component"
+            >
+              <el-icon class="el-icon--upload">
+                <upload-filled />
+              </el-icon>
+              <div class="el-upload__text">
+                将文件拖到此处，或<em>点击选择</em>
+              </div>
+              <template #tip>
+                <div class="el-upload__tip">
+                  <p v-if="attachmentForm.indicator" style="color: #409EFF; font-weight: 500;">
+                    当前指标：{{ getIndicatorLabel(attachmentForm.indicator) }} | 支持格式：{{ currentIndicatorFileTypes }}
+                  </p>
+                  <p v-else class="warning-text">
+                    ⚠️ 请先在上方选择考核指标，然后再上传文件
+                  </p>
+                  <p>支持多文件上传，单个文件不超过50MB，最多上传10个文件</p>
+                  <p v-if="attachmentFileList.length > 0" style="color: #67C23A; font-weight: 500;">
+                    ✓ 已选择 {{ attachmentFileList.length }} 个文件，提交表单时将自动上传
+                  </p>
+                </div>
+              </template>
+            </el-upload>
+          </el-form-item>
+
+          <!-- 已选择的文件列表 -->
+          <div v-if="attachmentFileList.length > 0" class="selected-files">
+            <h4>已选择的文件（{{ attachmentFileList.length }}）</h4>
+            <el-table :data="attachmentFileList" border stripe size="small">
+              <el-table-column label="文件名" prop="name" />
+              <el-table-column label="大小" width="120">
+                <template #default="{ row }">
+                  {{ formatFileSize(row.size) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="考核指标" width="150">
+                <template #default="{ row }">
+                  {{ getIndicatorLabel(row.indicator) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" align="center">
+                <template #default="{ row, $index }">
+                  <el-button
+                    type="danger"
+                    size="small"
+                    link
+                    @click="removeFile($index)"
+                  >
+                    删除
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-card>
+
         <!-- 操作按钮 -->
         <el-form-item class="form-actions">
           <el-button
             type="primary"
             size="large"
             :disabled="isSubmitted"
+            :loading="isSubmitting"
             @click="handleSubmit"
           >
-            {{ isSubmitted ? '已提交' : '提交表单' }}
+            {{ isSubmitted ? '已提交' : (attachmentFileList.length > 0 ? '提交表单并上传附件' : '提交表单') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -688,7 +794,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadInstance, type UploadUserFile } from 'element-plus'
+import type { IndicatorType } from '@/types/attachment'
+import { INDICATORS } from '@/types/attachment'
+import apiClient from '@/api/client'
 
 // Props
 interface Props {
@@ -708,6 +818,21 @@ const emit = defineEmits<{
 
 // Form reference
 const formRef = ref<FormInstance>()
+
+// Upload reference
+const uploadRef = ref<UploadInstance>()
+
+// Attachment form data
+const attachmentForm = reactive({
+  indicator: '' as IndicatorType | ''
+})
+
+// Attachment state
+const attachmentFileList = ref<UploadUserFile[]>([])
+const isSubmitting = ref(false)
+
+// Attachment indicators
+const attachmentIndicators = INDICATORS
 
 // Form data structure
 const formData = reactive({
@@ -811,6 +936,20 @@ const formData = reactive({
 
 // State
 const isSubmitted = ref(false)
+
+// Computed properties for attachment upload
+const currentIndicatorFileTypes = computed(() => {
+  if (!attachmentForm.indicator) return ''
+  const indicator = attachmentIndicators.find(i => i.key === attachmentForm.indicator)
+  return indicator ? indicator.fileTypes.join(', ') : ''
+})
+
+const acceptedFileTypes = computed(() => {
+  if (!attachmentForm.indicator) return ''
+  const indicator = attachmentIndicators.find(i => i.key === attachmentForm.indicator)
+  if (!indicator) return ''
+  return indicator.fileTypes.map(type => `.${type}`).join(',')
+})
 
 // Validation rules
 const rules = reactive<FormRules>({
@@ -1069,6 +1208,138 @@ const calculateFinalScore = () => {
   )
 }
 
+// Attachment upload methods
+const handleIndicatorChange = () => {
+  // Don't clear files, just update their indicator
+  // This allows users to select indicator after adding files
+  if (attachmentFileList.value.length > 0) {
+    ElMessage.info('已更新所有文件的考核指标')
+    // Update indicator for all existing files
+    attachmentFileList.value.forEach(file => {
+      (file as any).indicator = attachmentForm.indicator
+    })
+  }
+}
+
+const handleFileChange = (file: UploadUserFile, fileList: UploadUserFile[]) => {
+  // Validate indicator is selected
+  if (!attachmentForm.indicator) {
+    ElMessage.warning('请先选择考核指标')
+    return
+  }
+  
+  // Validate file size (50MB)
+  const maxSize = 50 * 1024 * 1024
+  if (file.size && file.size > maxSize) {
+    ElMessage.error(`文件 ${file.name} 大小超过50MB限制`)
+    return
+  }
+  
+  // Validate file type
+  const indicator = attachmentIndicators.find(i => i.key === attachmentForm.indicator)
+  if (indicator) {
+    const fileExt = file.name.split('.').pop()?.toLowerCase()
+    if (fileExt && !indicator.fileTypes.includes(fileExt)) {
+      ElMessage.error(`文件 ${file.name} 格式不支持，请上传 ${indicator.fileTypes.join(', ')} 格式的文件`)
+      return
+    }
+  }
+  
+  // Add indicator to file metadata
+  (file as any).indicator = attachmentForm.indicator
+  attachmentFileList.value = fileList
+}
+
+const handleFileRemove = (file: UploadUserFile, fileList: UploadUserFile[]) => {
+  attachmentFileList.value = fileList
+}
+
+const handleExceed = (files: File[]) => {
+  ElMessage.warning(`最多只能上传10个文件，当前选择了 ${files.length} 个文件`)
+}
+
+const removeFile = (index: number) => {
+  attachmentFileList.value.splice(index, 1)
+}
+
+const getIndicatorLabel = (key: string): string => {
+  const indicator = attachmentIndicators.find(i => i.key === key)
+  return indicator ? indicator.label : key
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// Upload attachments to backend
+const uploadAttachments = async (evaluationId: string): Promise<boolean> => {
+  if (attachmentFileList.value.length === 0) {
+    return true // No files to upload
+  }
+
+  try {
+    let successCount = 0
+    let failCount = 0
+
+    // Upload each file
+    for (const file of attachmentFileList.value) {
+      try {
+        const indicator = (file as any).indicator || attachmentForm.indicator
+        if (!indicator) {
+          console.warn('File missing indicator:', file.name)
+          failCount++
+          continue
+        }
+
+        // Create FormData
+        const formData = new FormData()
+        formData.append('evaluation_id', evaluationId)
+        formData.append('indicator', indicator)
+        formData.append('files', file.raw as File)
+
+        // Get token
+        const token = localStorage.getItem('token')
+
+        // Upload file
+        const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+        const response = await fetch(`${baseURL}/teaching-office/attachments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        })
+
+        if (response.ok) {
+          successCount++
+        } else {
+          console.error('Upload failed for file:', file.name)
+          failCount++
+        }
+      } catch (error) {
+        console.error('Error uploading file:', file.name, error)
+        failCount++
+      }
+    }
+
+    if (failCount > 0) {
+      ElMessage.warning(`${successCount} 个文件上传成功，${failCount} 个文件上传失败`)
+      return false
+    } else {
+      ElMessage.success(`${successCount} 个附件上传成功`)
+      return true
+    }
+  } catch (error) {
+    console.error('Upload attachments error:', error)
+    ElMessage.error('附件上传失败')
+    return false
+  }
+}
+
 // Handle submit
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -1077,15 +1348,23 @@ const handleSubmit = async () => {
     // 验证表单
     await formRef.value.validate()
     
+    // 标记为提交中
+    isSubmitting.value = true
+    
+    // 触发提交事件，传递表单数据和附件上传函数
+    emit('submit', {
+      formData: { ...formData },
+      attachments: attachmentFileList.value,
+      uploadAttachments
+    })
+    
     // 标记为已提交
     isSubmitted.value = true
-    
-    // 触发提交事件，传递表单数据
-    emit('submit', { ...formData })
     
   } catch (error: any) {
     console.error('Submit failed:', error)
     ElMessage.error('请填写所有必填项')
+    isSubmitting.value = false
   }
 }
 
@@ -1334,5 +1613,51 @@ defineExpose({
   font-weight: bold;
   color: #67C23A;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Attachment upload styles */
+.attachment-card {
+  margin: 20px 0;
+  background-color: #f9f9f9;
+  border: 1px solid #e4e7ed;
+}
+
+.upload-component {
+  width: 100%;
+}
+
+.upload-component :deep(.el-upload-dragger) {
+  width: 100%;
+  padding: 40px;
+}
+
+.el-upload__tip {
+  margin-top: 10px;
+  line-height: 1.6;
+}
+
+.el-upload__tip p {
+  margin: 5px 0;
+  font-size: 13px;
+  color: #606266;
+}
+
+.warning-text {
+  color: #e6a23c;
+  font-weight: 500;
+}
+
+.selected-files {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+}
+
+.selected-files h4 {
+  margin: 0 0 15px 0;
+  font-size: 15px;
+  color: #303133;
 }
 </style>

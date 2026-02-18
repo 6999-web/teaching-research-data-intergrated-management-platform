@@ -45,7 +45,7 @@ onMounted(async () => {
     const evaluation = evalResponse.data
     
     evaluationYear.value = evaluation.evaluationYear
-    isLocked.value = evaluation.status === 'locked' || evaluation.status === 'submitted'
+    isLocked.value = evaluation.status === 'submitted'
 
     // Fetch existing attachments
     const attachmentsResponse = await apiClient.get(`/teaching-office/attachments`, {
@@ -61,10 +61,10 @@ onMounted(async () => {
 // Handle submit
 const handleSubmit = async () => {
   try {
-    // Call API to submit attachments (lock the evaluation)
-    await apiClient.post(`/teaching-office/self-evaluation/${evaluationId.value}/submit-attachments`)
+    // Call API to submit attachments
+    await apiClient.post(`/teaching-office/self-evaluation/${evaluationId.value}/submit`)
     
-    ElMessage.success('附件提交成功，表单已锁定')
+    ElMessage.success('提交成功')
     
     // Navigate back to self-evaluation page
     setTimeout(() => {

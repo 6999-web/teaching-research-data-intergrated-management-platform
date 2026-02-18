@@ -272,7 +272,7 @@ const resetFilters = () => {
 // Download attachment
 const downloadAttachment = async (attachment: AttachmentWithRelations) => {
   try {
-    const response = await apiClient.get(`/attachments/${attachment.id}/download`, {
+    const response = await apiClient.get(`/teaching-office/attachments/${attachment.id}/download`, {
       responseType: 'blob'
     })
     

@@ -90,6 +90,11 @@ export const scoringApi = {
   // Submit final score
   submitFinalScore: (data: any) => {
     return apiClient.post('/scoring/final-score', data)
+  },
+  
+  // Submit to evaluation office (for evaluation team)
+  submitToOffice: (evaluationId: string) => {
+    return apiClient.post(`/scoring/${evaluationId}/submit-to-office`)
   }
 }
 

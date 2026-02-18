@@ -4,11 +4,13 @@ from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration
 from fastapi import UploadFile
 from io import BytesIO
 from app.core.config import settings
+from app.services.local_file_service import local_file_service
 
 class MinIOService:
     def __init__(self):
         self.client = None
         self._initialized = False
+        self._use_local_storage = False  # 标记是否使用本地存储
     
     def _initialize(self):
         """Lazy initialization of MinIO client"""
@@ -23,9 +25,13 @@ class MinIOService:
                 self._ensure_bucket_exists()
                 self._setup_long_term_storage_policy()
                 self._initialized = True
+                self._use_local_storage = False
+                print("✅ MinIO 服务连接成功")
             except Exception as e:
-                print(f"Warning: MinIO initialization failed: {e}")
-                # Don't raise exception, allow tests to run with mocked service
+                print(f"⚠️  MinIO 服务不可用，切换到本地文件存储: {e}")
+                self._use_local_storage = True
+                self._initialized = True
+                # Don't raise exception, use local storage as fallback
     
     def _ensure_bucket_exists(self):
         """Ensure the bucket exists, create if not"""
@@ -92,13 +98,22 @@ class MinIOService:
         - 文件上传到 MinIO 对象存储
         - 使用唯一的 object_name 避免冲突
         - 支持大文件上传
+        - 如果 MinIO 不可用，自动切换到本地文件存储
         
         需求: 18.1, 18.4
         """
         self._initialize()
+        
+        # 如果使用本地存储
+        if self._use_local_storage:
+            print(f"📁 使用本地文件存储: {object_name}")
+            return await local_file_service.upload_file_object(file, object_name)
+        
+        # 使用 MinIO 存储
         try:
             if not self.client:
-                return False
+                print("⚠️  MinIO 客户端未初始化，切换到本地存储")
+                return await local_file_service.upload_file_object(file, object_name)
             
             # Read file content
             file_content = await file.read()
@@ -121,10 +136,12 @@ class MinIOService:
             # Reset file pointer for potential reuse
             await file.seek(0)
             
+            print(f"☁️  文件已上传到 MinIO: {object_name}")
             return True
         except S3Error as e:
-            print(f"Error uploading file: {e}")
-            return False
+            print(f"❌ MinIO 上传失败，切换到本地存储: {e}")
+            # 如果 MinIO 上传失败，回退到本地存储
+            return await local_file_service.upload_file_object(file, object_name)
     
     def download_file(self, object_name: str, file_path: str):
         """Download a file from MinIO"""
@@ -167,33 +184,53 @@ class MinIOService:
         Get file as stream for download
         
         用于附件下载（需求 18.6）
+        支持从 MinIO 或本地文件系统获取文件
         """
         self._initialize()
+        
+        # 如果使用本地存储
+        if self._use_local_storage:
+            return local_file_service.get_file_stream(object_name)
+        
+        # 使用 MinIO 存储
         try:
             if not self.client:
-                return None
+                # MinIO 不可用，尝试从本地存储获取
+                return local_file_service.get_file_stream(object_name)
+            
             response = self.client.get_object(
                 settings.MINIO_BUCKET,
                 object_name
             )
             return response
         except S3Error as e:
-            print(f"Error getting file stream: {e}")
-            return None
+            print(f"Error getting file stream from MinIO, trying local storage: {e}")
+            # 如果 MinIO 获取失败，尝试从本地存储获取
+            return local_file_service.get_file_stream(object_name)
     
     def check_file_exists(self, object_name: str) -> bool:
         """
         Check if a file exists in storage
         
         用于验证归档文件的存在性（需求 18.4）
+        支持检查 MinIO 或本地文件系统
         """
         self._initialize()
+        
+        # 如果使用本地存储
+        if self._use_local_storage:
+            return local_file_service.check_file_exists(object_name)
+        
+        # 使用 MinIO 存储
         try:
             if not self.client:
-                return False
+                # MinIO 不可用，检查本地存储
+                return local_file_service.check_file_exists(object_name)
+            
             self.client.stat_object(settings.MINIO_BUCKET, object_name)
             return True
         except S3Error:
-            return False
+            # MinIO 中不存在，检查本地存储
+            return local_file_service.check_file_exists(object_name)
 
 minio_service = MinIOService()

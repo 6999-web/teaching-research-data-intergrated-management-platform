@@ -157,6 +157,31 @@
             查看所有评审人打分
           </el-button>
         </el-form-item>
+        
+        <!-- Submit to Office Section (only for evaluation_team) -->
+        <div v-if="props.currentUserRole === 'evaluation_team' && hasSubmitted" class="submit-office-section">
+          <el-divider />
+          <div class="submit-office-info">
+            <el-alert
+              title="考评小组评分完成"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 20px;"
+            >
+              请确认评分无误后，提交到考评办公室进行最终得分确定
+            </el-alert>
+            <el-button
+              type="success"
+              size="large"
+              :loading="submittingToOffice"
+              :disabled="hasSubmittedToOffice"
+              @click="handleSubmitToOffice"
+            >
+              {{ hasSubmittedToOffice ? '已提交到考评办公室' : '提交到考评办公室' }}
+            </el-button>
+          </div>
+        </div>
       </el-form>
         </el-card>
       </el-tab-pane>
@@ -371,6 +396,7 @@ const props = defineProps<Props>()
 // Emits
 const emit = defineEmits<{
   submitted: [scoreRecordId: string]
+  submittedToOffice: [evaluationId: string]
 }>()
 
 // Form reference
@@ -379,9 +405,12 @@ const formRef = ref<FormInstance>()
 // State
 const submitting = ref(false)
 const hasSubmitted = ref(false)
+const submittingToOffice = ref(false)
+const hasSubmittedToOffice = ref(false)
 const allScoresVisible = ref(false)
 const allScoresLoading = ref(false)
 const allScoresData = ref<AllScoresResponse | null>(null)
+const evaluationStatus = ref<string>('')
 
 // Tab state
 const activeTab = ref('content')
@@ -583,6 +612,51 @@ const handleReset = () => {
   })
 }
 
+// Handle submit to evaluation office
+const handleSubmitToOffice = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '提交后考评表将流转到考评办公室，您将无法再修改评分。确定要提交吗？',
+      '确认提交到考评办公室',
+      {
+        confirmButtonText: '确定提交',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    submittingToOffice.value = true
+
+    const response = await scoringApi.submitToOffice(props.evaluationId)
+
+    hasSubmittedToOffice.value = true
+    evaluationStatus.value = response.data.status
+
+    ElMessage.success({
+      message: '已成功提交到考评办公室！',
+      duration: 5000,
+      showClose: true
+    })
+
+    emit('submittedToOffice', props.evaluationId)
+
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('Submit to office failed:', error)
+
+      const errorMessage = error.response?.data?.detail || '提交失败，请重试'
+
+      ElMessage.error({
+        message: errorMessage,
+        duration: 5000,
+        showClose: true
+      })
+    }
+  } finally {
+    submittingToOffice.value = false
+  }
+}
+
 // Handle view all scores
 const handleViewAllScores = async () => {
   allScoresVisible.value = true
@@ -636,7 +710,8 @@ const loadSelfEvaluation = async () => {
 const loadAttachments = async () => {
   attachmentsLoading.value = true
   try {
-    const response = await apiClient.get(`/attachments/${props.evaluationId}`)
+    const endpoint = `/teaching-office/attachments/${props.evaluationId}`
+    const response = await apiClient.get(endpoint)
     attachments.value = response.data
   } catch (error: any) {
     console.error('Failed to load attachments:', error)
@@ -649,7 +724,8 @@ const loadAttachments = async () => {
 // Download attachment
 const handleDownloadAttachment = async (attachment: any) => {
   try {
-    const response = await apiClient.get(`/attachments/${attachment.id}/download`, {
+    const endpoint = `/teaching-office/attachments/${attachment.id}/download`
+    const response = await apiClient.get(endpoint, {
       responseType: 'blob'
     })
     

@@ -31,11 +31,13 @@ const teachingOfficeId = ref(localStorage.getItem('teachingOfficeId') || 'teachi
 const evaluationYear = ref(new Date().getFullYear())
 
 // Handle form submission
-const handleSubmit = async (formData: any) => {
+const handleSubmit = async (submitData: any) => {
   try {
     ElMessage.loading('正在提交自评表，请稍候...')
     
-    // 一次性完成所有操作：保存 → 提交 → 锁定 → AI评分
+    // Extract form data and attachment upload function
+    const { formData, attachments, uploadAttachments } = submitData
+    
     // Step 1: Save self-evaluation
     const saveResponse = await selfEvaluationApi.save({
       teaching_office_id: teachingOfficeId.value,
@@ -45,16 +47,23 @@ const handleSubmit = async (formData: any) => {
 
     const evaluationId = saveResponse.data.evaluation_id
 
-    // Step 2: Submit and lock (自动锁定，状态变为locked)
-    await selfEvaluationApi.submit(evaluationId)
-
-    // Step 3: Automatically trigger AI scoring (自动触发AI评分，状态变为ai_scored)
-    try {
-      await selfEvaluationApi.triggerAIScoring(evaluationId)
-    } catch (aiError) {
-      console.warn('AI评分触发失败，但不影响提交:', aiError)
-      // AI评分失败不影响提交结果，继续执行
+    // Step 2: Upload attachments if any
+    if (attachments && attachments.length > 0) {
+      ElMessage.closeAll()
+      ElMessage.loading('正在上传附件，请稍候...')
+      
+      const uploadSuccess = await uploadAttachments(evaluationId)
+      if (!uploadSuccess) {
+        ElMessage.closeAll()
+        ElMessage.warning('附件上传失败，但表单已保存。您可以稍后单独上传附件。')
+        // Continue with submission even if attachment upload fails
+      }
     }
+
+    // Step 3: Submit to evaluation team
+    ElMessage.closeAll()
+    ElMessage.loading('正在提交到考评小组，请稍候...')
+    await selfEvaluationApi.submit(evaluationId)
 
     // 提交成功
     ElMessage.closeAll()

@@ -1,11 +1,11 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
-    role: Literal['teaching_office', 'evaluation_team', 'evaluation_office', 'president_office']
+    role: Optional[Literal['teaching_office', 'evaluation_team', 'evaluation_office', 'president_office']] = None
 
 
 class LoginResponse(BaseModel):

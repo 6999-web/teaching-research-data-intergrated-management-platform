@@ -414,6 +414,7 @@ const getStatusTagType = (status: string): string => {
     'locked': 'warning',
     'ai_scored': 'success',
     'manually_scored': 'primary',
+    'ready_for_final': 'warning',
     'finalized': 'danger',
     'published': 'success'
   }
@@ -428,6 +429,7 @@ const getStatusLabel = (status: string): string => {
     'locked': '已锁定',
     'ai_scored': 'AI已评分',
     'manually_scored': '已手动评分',
+    'ready_for_final': '待最终确定',
     'finalized': '已确定最终得分',
     'published': '已公示'
   }

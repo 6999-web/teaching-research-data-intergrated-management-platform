@@ -73,15 +73,53 @@
             @submit="handleSubmit"
           />
           
-          <!-- 材料提交（附件管理） -->
-          <AttachmentUpload
-            v-if="activeMenu === 1"
-            :evaluation-id="currentEvaluationId || 'a1b2c3d4-e5f6-4a5b-8c9d-000000000000'"
-            :evaluation-year="new Date().getFullYear()"
-            :is-locked="false"
-            @submit="handleAttachmentSubmit"
-            @back="handleAttachmentBack"
-          />
+          <!-- 结果查看 -->
+          <div v-if="activeMenu === 1" class="result-view">
+            <el-alert
+              title="评分结果"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 20px;"
+            >
+              查看您的自评表评分结果和详细反馈
+            </el-alert>
+            
+            <el-card class="score-card">
+              <template #header>
+                <div class="card-header">
+                  <h3>评分汇总</h3>
+                  <el-tag type="success" size="large">已完成</el-tag>
+                </div>
+              </template>
+              
+              <el-descriptions :column="2" border size="large">
+                <el-descriptions-item label="常规教学工作总分">
+                  <span class="score-value">80</span> 分
+                </el-descriptions-item>
+                
+                <el-descriptions-item label="特色与亮点项目总分">
+                  <span class="score-value">0</span> 分
+                </el-descriptions-item>
+                
+                <el-descriptions-item label="负面清单扣分">
+                  <span class="score-value negative">-0</span> 分
+                </el-descriptions-item>
+                
+                <el-descriptions-item label="最终得分">
+                  <span class="final-score">0</span> 分
+                </el-descriptions-item>
+              </el-descriptions>
+            </el-card>
+            
+            <el-card class="feedback-card" style="margin-top: 20px;">
+              <template #header>
+                <h3>评分详情</h3>
+              </template>
+              
+              <el-empty description="暂无评分数据" />
+            </el-card>
+          </div>
           
           <!-- 下学期改进措施 -->
           <div v-if="activeMenu === 2" class="improvement-list">
@@ -146,7 +184,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import NewSelfEvaluationForm from '@/components/NewSelfEvaluationForm.vue'
-import AttachmentUpload from '@/components/AttachmentUpload.vue'
 import { selfEvaluationApi } from '@/api/client'
 import { 
   User,
@@ -246,7 +283,7 @@ const shouldShowForm = computed(() => {
 // 菜单项（只有教研室）
 const menuItems = ref([
   { name: '填写自评表', icon: markRaw(EditPen) },
-  { name: '材料提交', icon: markRaw(Upload) },
+  { name: '结果查看', icon: markRaw(View) },
   { name: '下学期改进措施', icon: markRaw(CircleCheck) }
 ])
 
@@ -256,7 +293,7 @@ const tabsConfig = [
     { name: '教研室工作考核评分表', icon: markRaw(EditPen), description: '填写教研室工作考核评分表' }
   ],
   [
-    { name: '附件列表', icon: markRaw(FolderOpened), description: '查看和提交附件' }
+    { name: '评分结果', icon: markRaw(View), description: '查看自评表评分结果' }
   ],
   [
     { name: '下学期改进措施', icon: markRaw(CircleCheck), description: '查看下学期所有老师的改进措施' }
@@ -281,22 +318,6 @@ const currentFunctions = computed(() => {
 const selectMenu = async (index: number) => {
   activeMenu.value = index
   activeTab.value = 0
-  
-  // 如果切换到材料提交页面，且还没有evaluation_id，先创建草稿
-  if (index === 1 && !currentEvaluationId.value) {
-    try {
-      const saveResponse = await selfEvaluationApi.save({
-        teaching_office_id: authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
-        evaluation_year: new Date().getFullYear(),
-        content: {} // 空内容，创建草稿
-      })
-      currentEvaluationId.value = saveResponse.data.evaluation_id
-    } catch (error) {
-      console.error('Failed to create draft evaluation:', error)
-      ElMessage.error('无法创建自评表草稿，请先填写自评表')
-      activeMenu.value = 0 // 返回到自评表页面
-    }
-  }
 }
 
 const goToHome = () => {
@@ -324,15 +345,20 @@ const handleLogout = () => {
 }
 
 // 自评表表单处理函数
-const handleSubmit = async (formData: any) => {
+const handleSubmit = async (submitData: any) => {
+  let loadingMessage: any = null
+  
   try {
     // 显示加载提示
-    const loadingMessage = ElMessage({
+    loadingMessage = ElMessage({
       message: '正在提交自评表，请稍候...',
       type: 'info',
       duration: 0,
       showClose: false
     })
+    
+    // Extract form data and attachment upload function
+    const { formData, attachments, uploadAttachments } = submitData
     
     // Step 1: Save self-evaluation
     const saveResponse = await selfEvaluationApi.save({
@@ -346,21 +372,54 @@ const handleSubmit = async (formData: any) => {
     // 保存evaluation_id供附件上传使用
     currentEvaluationId.value = evaluationId
 
-    // Step 2: Submit and lock
-    await selfEvaluationApi.submit(evaluationId)
+    // Step 2: Upload attachments if any
+    if (attachments && attachments.length > 0) {
+      if (loadingMessage) loadingMessage.close()
+      loadingMessage = ElMessage({
+        message: '正在上传附件，请稍候...',
+        type: 'info',
+        duration: 0,
+        showClose: false
+      })
+      
+      const uploadSuccess = await uploadAttachments(evaluationId)
+      if (!uploadSuccess) {
+        if (loadingMessage) loadingMessage.close()
+        ElMessage.warning('附件上传失败，但表单已保存。您可以稍后单独上传附件。')
+        // Continue with submission even if attachment upload fails
+      }
+    }
 
-    // Step 3: Trigger AI scoring
+    // Step 3: Submit and lock
+    if (loadingMessage) loadingMessage.close()
+    loadingMessage = ElMessage({
+      message: '正在提交到考评小组，请稍候...',
+      type: 'info',
+      duration: 0,
+      showClose: false
+    })
+    
     try {
-      await selfEvaluationApi.triggerAIScoring(evaluationId)
-    } catch (aiError) {
-      console.warn('AI评分触发失败，但不影响提交:', aiError)
+      await selfEvaluationApi.submit(evaluationId)
+    } catch (submitError: any) {
+      if (loadingMessage) loadingMessage.close()
+      console.error('Submit error:', submitError)
+      
+      // 如果是403错误，可能是权限问题
+      if (submitError.response?.status === 403) {
+        ElMessage.error('提交失败：没有权限。请确保您已正确登录。')
+      } else {
+        ElMessage.error(submitError.response?.data?.detail || '提交失败，请重试')
+      }
+      return
     }
 
     // Success
-    loadingMessage.close()
+    if (loadingMessage) loadingMessage.close()
     ElMessage.success('提交成功！数据已上传到考评小组端')
     
   } catch (error: any) {
+    if (loadingMessage) loadingMessage.close()
     console.error('Failed to submit self-evaluation:', error)
     
     if (error.response?.status === 401) {
@@ -369,22 +428,14 @@ const handleSubmit = async (formData: any) => {
       setTimeout(() => {
         router.push('/login')
       }, 1500)
+    } else if (error.response?.status === 403) {
+      ElMessage.error('没有权限执行此操作，请检查登录状态')
     } else if (error.response?.data?.detail) {
       ElMessage.error(error.response.data.detail)
     } else {
       ElMessage.error('提交失败，请检查网络连接或联系管理员')
     }
   }
-}
-
-// 附件管理处理函数
-const handleAttachmentSubmit = () => {
-  ElMessage.success('附件提交成功')
-}
-
-const handleAttachmentBack = () => {
-  // 可以选择返回到上一个菜单或其他操作
-  ElMessage.info('返回')
 }
 
 // 获取状态类型
@@ -788,5 +839,53 @@ const getStatusType = (status: string) => {
   .main-content {
     margin-left: 60px;
   }
+}
+
+/* 结果查看页面样式 */
+.result-view {
+  width: 100%;
+}
+
+.score-card {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.score-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.score-card .card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
+}
+
+.score-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #409EFF;
+}
+
+.score-value.negative {
+  color: #F56C6C;
+}
+
+.final-score {
+  font-size: 28px;
+  font-weight: bold;
+  color: #67C23A;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.feedback-card {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.feedback-card h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
 }
 </style>
