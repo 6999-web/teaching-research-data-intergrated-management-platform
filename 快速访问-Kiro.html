@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教研室数据管理平台 - 快速访问</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .status-icon {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .link-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .link-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .link-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .link-url {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .accounts {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .accounts h3 {
+            color: #92400e;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .account-item {
+            background: white;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .account-role {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .account-creds {
+            font-family: 'Courier New', monospace;
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 教研室数据管理平台</h1>
+        <div class="subtitle">
+            通过 Kiro 编辑器启动 <span class="badge">运行中</span>
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <div class="status-icon"></div>
+                <strong>前端服务:</strong>&nbsp;http://localhost:3000 (进程 1)
+            </div>
+            <div class="status-item">
+                <div class="status-icon"></div>
+                <strong>后端服务:</strong>&nbsp;http://localhost:8000 (进程 2)
+            </div>
+            <div class="status-item">
+                <div class="status-icon"></div>
+                <strong>数据库:</strong>&nbsp;MySQL localhost:3306
+            </div>
+        </div>
+        
+        <div class="links">
+            <a href="http://localhost:3000" class="link-card" target="_blank">
+                <div class="link-icon">🏠</div>
+                <div class="link-title">前端应用</div>
+                <div class="link-url">localhost:3000</div>
+            </a>
+            
+            <a href="http://localhost:8000/docs" class="link-card" target="_blank">
+                <div class="link-icon">📚</div>
+                <div class="link-title">API 文档</div>
+                <div class="link-url">localhost:8000/docs</div>
+            </a>
+            
+            <a href="http://localhost:8000/api/health" class="link-card" target="_blank">
+                <div class="link-icon">❤️</div>
+                <div class="link-title">健康检查</div>
+                <div class="link-url">localhost:8000/api/health</div>
+            </a>
+            
+            <a href="http://localhost:8000" class="link-card" target="_blank">
+                <div class="link-icon">🔧</div>
+                <div class="link-title">后端 API</div>
+                <div class="link-url">localhost:8000</div>
+            </a>
+        </div>
+        
+        <div class="accounts">
+            <h3>🔑 测试账号</h3>
+            <div class="account-item">
+                <span class="account-role">教研室主任</span>
+                <span class="account-creds">director1 / 123123</span>
+            </div>
+            <div class="account-item">
+                <span class="account-role">教学办主任</span>
+                <span class="account-creds">teaching_office_director / 123123</span>
+            </div>
+            <div class="account-item">
+                <span class="account-role">考评小组</span>
+                <span class="account-creds">reviewer1 / 123123</span>
+            </div>
+            <div class="account-item">
+                <span class="account-role">校长办公室</span>
+                <span class="account-creds">president_office / 123123</span>
+            </div>
+        </div>
+        
+        <div class="footer">
+            启动时间: 2026-02-28 | 通过 Kiro 编辑器管理
+        </div>
+    </div>
+    
+    <script>
+        // 自动检测服务状态
+        async function checkServices() {
+            try {
+                const response = await fetch('http://localhost:8000/api/health');
+                if (response.ok) {
+                    console.log('✅ 后端服务正常');
+                }
+            } catch (error) {
+                console.log('⚠️ 后端服务未响应');
+            }
+        }
+        
+        checkServices();
+        setInterval(checkServices, 30000); // 每30秒检查一次
+    </script>
+</body>
+</html>

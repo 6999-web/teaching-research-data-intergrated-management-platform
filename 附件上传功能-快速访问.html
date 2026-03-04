@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>附件上传功能 - 快速访问</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .card h2 {
+            color: #303133;
+            margin-bottom: 20px;
+            font-size: 24px;
+            border-bottom: 3px solid #409eff;
+            padding-bottom: 10px;
+        }
+        
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .link-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .link-icon {
+            font-size: 32px;
+        }
+        
+        .link-content {
+            flex: 1;
+        }
+        
+        .link-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .link-desc {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        
+        .status {
+            background: #f0f9ff;
+            border-left: 4px solid #409eff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        
+        .status-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+        }
+        
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .checklist li {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f5f7fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .checklist li::before {
+            content: '✅';
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        
+        .quick-test {
+            background: #fef0f0;
+            border-left: 4px solid #f56c6c;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .quick-test h3 {
+            color: #f56c6c;
+            margin-bottom: 15px;
+        }
+        
+        .test-steps {
+            list-style: decimal;
+            padding-left: 20px;
+        }
+        
+        .test-steps li {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .badge-success {
+            background: #f0f9ff;
+            color: #67c23a;
+        }
+        
+        .badge-info {
+            background: #ecf5ff;
+            color: #409eff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📎 附件上传功能 - 快速访问</h1>
+        
+        <!-- 状态卡片 -->
+        <div class="card">
+            <h2>✅ 完成状态</h2>
+            <div class="status">
+                <div class="status-item">
+                    <span class="status-icon">✅</span>
+                    <strong>功能已完成</strong>
+                    <span class="badge badge-success">2026-02-28</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-icon">📝</span>
+                    <strong>修改文件：</strong> NewSelfEvaluationForm.vue
+                </div>
+                <div class="status-item">
+                    <span class="status-icon">🔢</span>
+                    <strong>新增代码：</strong> 约 630 行
+                </div>
+                <div class="status-item">
+                    <span class="status-icon">📊</span>
+                    <strong>支持字段：</strong> 8 个常规教学工作字段
+                </div>
+            </div>
+            
+            <ul class="checklist">
+                <li>教学过程管理</li>
+                <li>教学质量管理</li>
+                <li>课程考核</li>
+                <li>教育教学科研工作</li>
+                <li>课程建设</li>
+                <li>教师队伍建设</li>
+                <li>科学研究与学术交流</li>
+                <li>教学档案室管理与建设</li>
+            </ul>
+        </div>
+        
+        <!-- 文档链接 -->
+        <div class="card">
+            <h2>📚 相关文档</h2>
+            <div class="links">
+                <a href="./附件上传功能完成总结.md" class="link-card">
+                    <div class="link-icon">📋</div>
+                    <div class="link-content">
+                        <div class="link-title">完成总结</div>
+                        <div class="link-desc">功能概述和技术实现</div>
+                    </div>
+                </a>
+                
+                <a href="./frontend/附件上传功能完成说明.md" class="link-card">
+                    <div class="link-icon">📖</div>
+                    <div class="link-content">
+                        <div class="link-title">功能说明</div>
+                        <div class="link-desc">详细的功能特性说明</div>
+                    </div>
+                </a>
+                
+                <a href="./frontend/附件上传功能测试指南.md" class="link-card">
+                    <div class="link-icon">🧪</div>
+                    <div class="link-content">
+                        <div class="link-title">测试指南</div>
+                        <div class="link-desc">完整的测试步骤和检查清单</div>
+                    </div>
+                </a>
+                
+                <a href="./frontend/附件上传功能对比.html" class="link-card">
+                    <div class="link-icon">🎨</div>
+                    <div class="link-content">
+                        <div class="link-title">可视化对比</div>
+                        <div class="link-desc">修改前后的界面对比</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        
+        <!-- 快速测试 -->
+        <div class="card">
+            <h2>🚀 快速测试</h2>
+            <div class="quick-test">
+                <h3>⚡ 5分钟快速测试</h3>
+                <ol class="test-steps">
+                    <li>访问 <strong>http://localhost:3000</strong></li>
+                    <li>使用 <code>director1 / 123123</code> 登录</li>
+                    <li>进入"教研室工作考核评分表"</li>
+                    <li>在任意字段右侧上传一个文件</li>
+                    <li>观察文件数量显示是否正确</li>
+                    <li>尝试删除文件</li>
+                    <li>填写表单并提交</li>
+                </ol>
+            </div>
+        </div>
+        
+        <!-- 服务状态 -->
+        <div class="card">
+            <h2>🌐 服务状态</h2>
+            <div class="links">
+                <a href="http://localhost:3000" class="link-card" target="_blank">
+                    <div class="link-icon">🏠</div>
+                    <div class="link-content">
+                        <div class="link-title">前端应用</div>
+                        <div class="link-desc">localhost:3000</div>
+                    </div>
+                </a>
+                
+                <a href="http://localhost:8000/docs" class="link-card" target="_blank">
+                    <div class="link-icon">📚</div>
+                    <div class="link-content">
+                        <div class="link-title">API 文档</div>
+                        <div class="link-desc">localhost:8000/docs</div>
+                    </div>
+                </a>
+                
+                <a href="./快速访问-Kiro.html" class="link-card">
+                    <div class="link-icon">⚡</div>
+                    <div class="link-content">
+                        <div class="link-title">Kiro 启动页</div>
+                        <div class="link-desc">服务管理和快速访问</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
