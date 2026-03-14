@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import UploadFile
 from typing import Optional
 
+from app.core.safe_log import safe_print
+
 class LocalFileService:
     def __init__(self, base_path: str = "uploads"):
         """初始化本地文件服务"""
@@ -27,23 +29,29 @@ class LocalFileService:
             bool: 上传是否成功
         """
         try:
-            # 构建完整的文件路径
-            file_path = self.base_path / object_name
-            
-            # 创建目录（如果不存在）
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # 保存文件
-            with open(file_path, "wb") as buffer:
-                content = await file.read()
-                buffer.write(content)
-            
-            # 重置文件指针
-            await file.seek(0)
-            
-            return True
+            content = await file.read()
+            return self.upload_bytes(object_name, content)
         except Exception as e:
-            print(f"Error uploading file to local storage: {e}")
+            safe_print("Error uploading file to local storage:", e)
+            return False
+
+    def upload_bytes(self, object_name: str, content: bytes) -> bool:
+        """直接使用字节内容写入本地文件，避免 UploadFile 二次读取或 seek 失败"""
+        try:
+            # 规范为 POSIX 风格路径，避免 Windows 下混用导致的问题
+            parts = object_name.replace("\\", "/").strip("/").split("/")
+            file_path = self.base_path
+            for p in parts:
+                file_path = file_path / p
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            return True
+        except OSError as e:
+            safe_print("Error writing file to local storage (path or permission):", e)
+            return False
+        except Exception as e:
+            safe_print("Error uploading bytes to local storage:", e)
             return False
     
     def get_file_stream(self, object_name: str):
@@ -62,7 +70,7 @@ class LocalFileService:
                 return open(file_path, "rb")
             return None
         except Exception as e:
-            print(f"Error getting file stream: {e}")
+            safe_print("Error getting file stream:", e)
             return None
     
     def check_file_exists(self, object_name: str) -> bool:
@@ -79,7 +87,7 @@ class LocalFileService:
             file_path = self.base_path / object_name
             return file_path.exists()
         except Exception as e:
-            print(f"Error checking file existence: {e}")
+            safe_print("Error checking file existence:", e)
             return False
     
     def delete_file(self, object_name: str) -> bool:
@@ -99,7 +107,7 @@ class LocalFileService:
                 return True
             return False
         except Exception as e:
-            print(f"Error deleting file: {e}")
+            safe_print("Error deleting file:", e)
             return False
 
 # 创建全局实例

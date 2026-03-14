@@ -1,11 +1,12 @@
 <template>
   <div class="publication-page">
     <div class="page-header">
-      <h1>发起公示</h1>
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item :to="{ path: '/' }">
-          首页
-        </el-breadcrumb-item>
+      <div class="header-row">
+        <h1>发起公示</h1>
+        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+      </div>
+      <el-breadcrumb class="management-breadcrumb" separator="/">
+        <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
         <el-breadcrumb-item>管理端</el-breadcrumb-item>
         <el-breadcrumb-item>发起公示</el-breadcrumb-item>
       </el-breadcrumb>
@@ -230,7 +231,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Promotion, Refresh, Check } from '@element-plus/icons-vue'
-import { publicationApi } from '@/api/client'
+import { publicationApi, managementResultApi } from '@/api/client'
 import type { EvaluationForPublication, PublicationDetail, PublishRequest } from '@/types/publication'
 
 // State
@@ -254,38 +255,22 @@ onMounted(async () => {
   await loadPublicationHistory()
 })
 
-// Load evaluations
+// Load evaluations（已审定同意或已公示的教研室，来自管理端结果接口）
 const loadEvaluations = async () => {
   loading.value = true
   try {
-    // Mock data - Replace with actual API call when backend endpoint is ready
-    // In real implementation: const response = await publicationApi.getEvaluationsForPublication()
-    evaluations.value = [
-      {
-        id: '1',
-        teaching_office_name: '计算机科学教研室',
-        evaluation_year: 2024,
-        status: 'approved',
-        final_score: 92.5,
-        approved_at: '2024-01-25T10:30:00'
-      },
-      {
-        id: '2',
-        teaching_office_name: '数学教研室',
-        evaluation_year: 2024,
-        status: 'approved',
-        final_score: 88.3,
-        approved_at: '2024-01-25T14:20:00'
-      },
-      {
-        id: '3',
-        teaching_office_name: '物理教研室',
-        evaluation_year: 2024,
-        status: 'published',
-        final_score: 90.1,
-        approved_at: '2024-01-24T09:15:00'
-      }
-    ]
+    const response = await managementResultApi.getAllResults()
+    const list = Array.isArray(response.data) ? response.data : []
+    evaluations.value = list
+      .filter((r: any) => ['approved', 'published', 'distributed'].includes(r.approval_status || r.status))
+      .map((r: any) => ({
+        id: r.id,
+        teaching_office_name: r.teaching_office_name || '-',
+        evaluation_year: r.evaluation_year,
+        status: r.approval_status || r.status || 'approved',
+        final_score: r.final_score,
+        approved_at: r.approved_at || r.determined_at
+      }))
   } catch (error: any) {
     console.error('Failed to load evaluations:', error)
     ElMessage.error('加载教研室列表失败')
@@ -294,14 +279,14 @@ const loadEvaluations = async () => {
   }
 }
 
-// Load publication history
+// Load publication history（公示历史来自公示接口）
 const loadPublicationHistory = async () => {
   try {
     const response = await publicationApi.getPublications()
-    publicationHistory.value = response.data
+    const data = response.data
+    publicationHistory.value = Array.isArray(data) ? data : []
   } catch (error: any) {
     console.error('Failed to load publication history:', error)
-    // Don't show error message for history loading failure
   }
 }
 
@@ -449,6 +434,26 @@ const formatDateTime = (dateStr: string): string => {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header .header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-header .header-row h1 {
+  margin: 0;
+}
+
+.back-home-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-home-link:hover {
+  text-decoration: underline;
 }
 
 .page-header h1 {

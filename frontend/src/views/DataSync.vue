@@ -1,11 +1,12 @@
 <template>
   <div class="data-sync-page">
     <div class="page-header">
-      <h1>数据同步至校长办公会</h1>
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item :to="{ path: '/' }">
-          首页
-        </el-breadcrumb-item>
+      <div class="header-row">
+        <h1>数据同步至校长办公会</h1>
+        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+      </div>
+      <el-breadcrumb class="management-breadcrumb" separator="/">
+        <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
         <el-breadcrumb-item>管理端</el-breadcrumb-item>
         <el-breadcrumb-item>数据同步</el-breadcrumb-item>
       </el-breadcrumb>
@@ -186,7 +187,7 @@
           <el-timeline-item
             v-for="task in syncHistory"
             :key="task.id"
-            :timestamp="formatDateTime(task.created_at)"
+            :timestamp="formatDateTime(task.created_at || task.started_at)"
             placement="top"
             :type="getTimelineType(task.status)"
             :icon="getTimelineIcon(task.status)"
@@ -237,7 +238,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Refresh, Check, Close, Loading as LoadingIcon } from '@element-plus/icons-vue'
-import { reviewApi } from '@/api/client'
+import { reviewApi, managementResultApi } from '@/api/client'
 import type { EvaluationForSync, SyncTask, SyncTaskStatus } from '@/types/sync'
 
 // State
@@ -269,41 +270,31 @@ onMounted(async () => {
   await loadSyncHistory()
 })
 
-// Load evaluations
+// Load evaluations（已确定最终得分的教研室，来自管理端结果；已同步状态来自同步任务列表）
 const loadEvaluations = async () => {
   loading.value = true
   try {
-    // Mock data - Replace with actual API call
-    // In real implementation: const response = await reviewApi.getEvaluationsForSync()
-    evaluations.value = [
-      {
-        id: '1',
-        teaching_office_name: '计算机科学教研室',
-        evaluation_year: 2024,
-        status: 'finalized',
-        final_score: 92.5,
-        finalized_at: '2024-01-20T10:30:00',
-        synced: false
-      },
-      {
-        id: '2',
-        teaching_office_name: '数学教研室',
-        evaluation_year: 2024,
-        status: 'finalized',
-        final_score: 88.3,
-        finalized_at: '2024-01-21T14:20:00',
-        synced: false
-      },
-      {
-        id: '3',
-        teaching_office_name: '物理教研室',
-        evaluation_year: 2024,
-        status: 'finalized',
-        final_score: 90.1,
-        finalized_at: '2024-01-22T09:15:00',
-        synced: true
+    const [resultsRes, tasksRes] = await Promise.all([
+      managementResultApi.getAllResults({ status: 'finalized' }),
+      reviewApi.getSyncTasks().catch(() => ({ data: [] }))
+    ])
+    const list = Array.isArray(resultsRes.data) ? resultsRes.data : []
+    const tasks = Array.isArray(tasksRes.data) ? tasksRes.data : []
+    const syncedIds = new Set<string>()
+    tasks.forEach((t: any) => {
+      if (t.status === 'completed' && t.evaluation_ids) {
+        t.evaluation_ids.forEach((eid: string) => syncedIds.add(String(eid)))
       }
-    ]
+    })
+    evaluations.value = list.map((r: any) => ({
+      id: r.id,
+      teaching_office_name: r.teaching_office_name || '-',
+      evaluation_year: r.evaluation_year,
+      status: r.status || 'finalized',
+      final_score: r.final_score,
+      finalized_at: r.approved_at || r.determined_at,
+      synced: syncedIds.has(String(r.id))
+    }))
   } catch (error: any) {
     console.error('Failed to load evaluations:', error)
     ElMessage.error('加载教研室列表失败')
@@ -312,27 +303,19 @@ const loadEvaluations = async () => {
   }
 }
 
-// Load sync history
+// Load sync history（来自后端同步任务列表）
 const loadSyncHistory = async () => {
   try {
-    // Mock data - Replace with actual API call
-    // In real implementation: const response = await reviewApi.getSyncHistory()
-    syncHistory.value = [
-      {
-        id: 'sync-001',
-        evaluation_ids: ['3'],
-        status: 'completed',
-        created_at: '2024-01-22T10:00:00',
-        completed_at: '2024-01-22T10:02:30'
-      },
-      {
-        id: 'sync-002',
-        evaluation_ids: ['4', '5'],
-        status: 'failed',
-        created_at: '2024-01-21T15:30:00',
-        error_message: '网络连接超时'
-      }
-    ]
+    const response = await reviewApi.getSyncTasks()
+    const data = Array.isArray(response.data) ? response.data : []
+    syncHistory.value = data.map((t: any) => ({
+      id: t.id,
+      evaluation_ids: (t.evaluation_ids || []).map((eid: string) => String(eid)),
+      status: t.status || 'pending',
+      created_at: t.started_at || t.created_at,
+      completed_at: t.completed_at,
+      error_message: t.error_message
+    }))
   } catch (error: any) {
     console.error('Failed to load sync history:', error)
   }
@@ -556,6 +539,26 @@ const formatDateTime = (dateStr: string): string => {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header .header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-header .header-row h1 {
+  margin: 0;
+}
+
+.back-home-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-home-link:hover {
+  text-decoration: underline;
 }
 
 .page-header h1 {

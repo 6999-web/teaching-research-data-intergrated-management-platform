@@ -1,9 +1,12 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.core.deps import get_db, require_management_roles, RoleChecker, get_current_user
 from app.models.user import User
@@ -74,7 +77,10 @@ def get_evaluations_for_scoring(
     if status:
         query = query.filter(SelfEvaluation.status == status)
     else:
-        query = query.filter(SelfEvaluation.status.in_(["submitted", "ai_scored", "manually_scored", "ready_for_final"]))
+        query = query.filter(SelfEvaluation.status.in_([
+            "locked", "submitted", "ai_scored", "manually_scored",
+            "ready_for_final", "finalized", "published"
+        ]))
     
     # Filter by year
     if year:
@@ -149,7 +155,7 @@ def submit_manual_score(
     if existing_score:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You have already submitted a score for this evaluation. Scores cannot be modified once submitted."
+            detail="您已为此次考评提交过评分，提交后无法修改。"
         )
     
     # Get weight based on reviewer role
@@ -170,8 +176,8 @@ def submit_manual_score(
     
     db.add(manual_score)
     
-    # Update evaluation status to manually_scored if it was ai_scored
-    if evaluation.status == "ai_scored":
+    # 只要有人提交了手动评分，就将考评状态改为已评分（便于列表显示「已评分」）
+    if evaluation.status in ("submitted", "locked", "ai_scored"):
         evaluation.status = "manually_scored"
         evaluation.updated_at = datetime.utcnow()
     
@@ -213,37 +219,65 @@ def submit_to_evaluation_office(
     current_user: User = Depends(RoleChecker(["evaluation_team"]))
 ):
     """
-    考评小组提交到考评办公室 (Submit to evaluation office).
+    评教小组将「评教小组平均分」提交到评教小组办公室 (Submit average to evaluation office).
     
-    - 考评小组评分完成后，提交到考评办公室
-    - 将状态从 ai_scored 或 manually_scored 改为 ready_for_final
-    - 仅考评小组可以执行此操作
+    - 流程：评教小组对手动评分 → 系统计算所有成员分数平均分 → 本接口将平均分（及全部评分数据）提交到办公室
+    - 仅当状态为 manually_scored（至少有一人完成手动评分、平均分已可计算）时允许提交
+    - 提交后状态改为 ready_for_final，办公室端可查看该考评及 manual_score_avg
+    - 本接口不需要 request body，空 POST 即可。
     """
+    # 调试日志：evaluation_id、当前状态
+    logger.info(
+        "submit-to-office: evaluation_id=%s, request has no body (empty POST)",
+        str(evaluation_id),
+    )
     evaluation = db.query(SelfEvaluation).filter(
         SelfEvaluation.id == evaluation_id
     ).first()
-    
     if not evaluation:
+        logger.warning("submit-to-office: evaluation not found, id=%s", str(evaluation_id))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Evaluation with id {evaluation_id} not found"
+            detail={"success": False, "message": "评分记录不存在"}
         )
-    
-    valid_statuses = ["ai_scored", "manually_scored"]
+    logger.info(
+        "submit-to-office: evaluation_id=%s, current status=%s",
+        str(evaluation_id),
+        evaluation.status,
+    )
+    # 仅允许「已手动评分」：评分完成后才计算平均分，再提交到办公室
+    valid_statuses = ["manually_scored"]
     if evaluation.status not in valid_statuses:
+        msg = (
+            "需先完成评教小组手动评分后再提交到考评办公室。"
+            "当前状态：{}。请先进行手动评分，系统将自动计算评教小组平均分。"
+        ).format(evaluation.status)
+        logger.warning("submit-to-office: status not allowed, id=%s, status=%s", str(evaluation_id), evaluation.status)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Evaluation status must be in {valid_statuses}, current status: {evaluation.status}"
+            detail={"success": False, "message": msg}
         )
-    
     evaluation.status = "ready_for_final"
     evaluation.updated_at = datetime.utcnow()
-    
+    log_operation(
+        db=db,
+        operation_type="submit_to_office",
+        operator_id=current_user.id,
+        operator_name=current_user.name,
+        operator_role=current_user.role,
+        target_id=evaluation_id,
+        target_type="self_evaluation",
+        details={
+            "evaluation_id": str(evaluation_id),
+            "teaching_office_id": str(evaluation.teaching_office_id),
+            "evaluation_year": evaluation.evaluation_year,
+        },
+    )
     db.commit()
     db.refresh(evaluation)
-    
     return {
-        "evaluation_id": evaluation_id,
+        "success": True,
+        "evaluation_id": str(evaluation_id),
         "status": evaluation.status,
         "message": "已提交到考评办公室"
     }

@@ -47,11 +47,16 @@ onMounted(async () => {
     evaluationYear.value = evaluation.evaluationYear
     isLocked.value = evaluation.status === 'submitted'
 
-    // Fetch existing attachments
-    const attachmentsResponse = await apiClient.get(`/teaching-office/attachments`, {
-      params: { evaluationId: evaluationId.value }
-    })
-    attachments.value = attachmentsResponse.data || []
+    // Fetch existing attachments（按自评表 ID 获取）
+    const attachmentsResponse = await apiClient.get(`/teaching-office/attachments/${evaluationId.value}`)
+    const list = attachmentsResponse.data || []
+    // 兼容后端 snake_case 与前端 camelCase
+    attachments.value = list.map((a: any) => ({
+      ...a,
+      fileName: a.file_name ?? a.fileName,
+      fileSize: a.file_size ?? a.fileSize,
+      uploadedAt: a.uploaded_at ?? a.uploadedAt
+    }))
   } catch (error) {
     console.error('Failed to load evaluation data:', error)
     ElMessage.error('加载数据失败')

@@ -79,7 +79,7 @@ def publish(
         if evaluation.status != "approved":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Evaluation {eval_id} has not been approved by president office yet. Current status: {evaluation.status}"
+                detail=f"Evaluation {evaluation.id} has not been approved by president office yet. Current status: {evaluation.status}"
             )
     
     # Verify that there is an approval record for these evaluations

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -86,6 +87,42 @@ const router = createRouter({
       component: () => import('@/views/ManagementResultView.vue')
     },
     {
+      path: '/scoring-progress',
+      name: 'scoring-progress',
+      component: () => import('@/views/ScoringProgress.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/submit-to-office',
+      name: 'submit-to-office',
+      component: () => import('@/views/SubmitToOffice.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/scoring-rules',
+      name: 'scoring-rules',
+      component: () => import('@/views/ScoringRules.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/my-scoring-records',
+      name: 'my-scoring-records',
+      component: () => import('@/views/MyScoringRecords.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/anomaly-records',
+      name: 'anomaly-records',
+      component: () => import('@/views/AnomalyRecords.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/all-scoring-records',
+      name: 'all-scoring-records',
+      component: () => import('@/views/AllScoringRecords.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/attachment-management',
       name: 'attachment-management',
       component: () => import('@/views/AttachmentManagement.vue')
@@ -101,6 +138,23 @@ const router = createRouter({
       component: () => import('@/views/ImprovementPlan.vue')
     }
   ]
+})
+
+// 进入需登录页面时从 localStorage 恢复 auth，解决刷新后空白
+router.beforeEach((to, _from, next) => {
+  if (to.meta.requiresAuth) {
+    const token = localStorage.getItem('token')
+    const role = localStorage.getItem('userRole')
+    if (token && role) {
+      try {
+        const authStore = useAuthStore()
+        authStore.loadFromStorage()
+      } catch {
+        // ignore
+      }
+    }
+  }
+  next()
 })
 
 export default router

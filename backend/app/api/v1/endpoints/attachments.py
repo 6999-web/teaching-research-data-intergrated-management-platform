@@ -5,6 +5,10 @@ from typing import List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
 import os
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.deps import get_db, get_current_user, RoleChecker
 from app.models.user import User
@@ -25,6 +29,15 @@ router = APIRouter()
 # Role checkers
 require_teaching_office = RoleChecker(["teaching_office", "director", "teacher"])
 require_management_roles = RoleChecker(["evaluation_team", "evaluation_office"])
+
+
+def _sanitize_path_segment(segment: str) -> str:
+    """移除路径中非法字符，避免 Windows/本地存储报错"""
+    if not segment or not isinstance(segment, str):
+        return "unknown"
+    # 保留字母数字、中文、下划线、连字符，其余替换为下划线
+    segment = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", segment)
+    return segment.strip() or "unknown"
 
 
 @router.post("/attachments", response_model=AttachmentUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -73,35 +86,48 @@ async def upload_attachments(
     
     uploaded_attachments = []
     
+    # 对 indicator 做路径安全处理，避免 Windows 非法字符导致写入失败
+    indicator_safe = _sanitize_path_segment(indicator)
+
     # 处理每个文件
     for file in files:
         try:
-            # 生成唯一的文件名
-            file_extension = os.path.splitext(file.filename)[1]
+            # 读取一次内容，避免 upload 时二次 read 或 seek(0) 失败导致 500
+            file_content = await file.read()
+            file_size = len(file_content)
+            if file_size == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"文件 {file.filename or '未知'} 为空，无法上传"
+                )
+
+            # 生成唯一的文件名（避免 file.filename 为空）
+            raw_filename = file.filename or "unknown"
+            file_extension = os.path.splitext(raw_filename)[1]
             unique_filename = f"{uuid4()}{file_extension}"
             
-            # 构建存储路径: evaluation_id/indicator/unique_filename
-            storage_path = f"{evaluation_id}/{indicator}/{unique_filename}"
+            # 构建存储路径: evaluation_id/indicator_safe/unique_filename（路径中只用安全字符）
+            storage_path = f"{evaluation_id}/{indicator_safe}/{unique_filename}"
             
-            # 上传文件到MinIO
-            upload_success = await minio_service.upload_file_object(file, storage_path)
+            # 使用字节内容上传，不再依赖 file.seek(0)
+            upload_success = minio_service.upload_file_bytes(
+                storage_path,
+                file_content,
+                content_type=file.content_type or "application/octet-stream",
+                original_filename=raw_filename,
+            )
             
             if not upload_success:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"文件 {file.filename} 上传失败"
+                    detail=f"文件 {raw_filename} 写入存储失败"
                 )
             
-            # 获取文件大小
-            file_content = await file.read()
-            file_size = len(file_content)
-            await file.seek(0)  # Reset file pointer
-            
-            # 创建附件记录（自动归档）
+            # 创建附件记录（自动归档），file_name 不允许为空
             attachment = Attachment(
                 evaluation_id=evaluation_id,
                 indicator=indicator,
-                file_name=file.filename,
+                file_name=raw_filename,
                 file_size=file_size,
                 file_type=file.content_type or "application/octet-stream",
                 storage_path=storage_path,
@@ -114,12 +140,29 @@ async def upload_attachments(
             db.add(attachment)
             uploaded_attachments.append(attachment)
             
-        except Exception as e:
-            # 如果某个文件上传失败，回滚已上传的文件
+        except HTTPException:
+            raise
+        except UnicodeEncodeError as e:
+            logger.exception("附件上传时发生编码错误: %s", e)
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"文件上传过程中发生错误: {str(e)}"
+                detail="文件上传失败，请稍后重试"
+            )
+        except Exception as e:
+            logger.exception("附件上传失败: %s", e)
+            db.rollback()
+            # 返回通用错误信息，避免将编码异常等敏感信息暴露给前端
+            detail = "文件上传失败，请稍后重试"
+            try:
+                err_str = str(e)
+                if err_str and "\u26a0" not in err_str and "codec" not in err_str.lower():
+                    detail = f"文件上传过程中发生错误: {err_str}"
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=detail
             )
     
     # 提交所有附件记录
@@ -135,11 +178,26 @@ async def upload_attachments(
             uploaded_count=len(uploaded_attachments)
         )
     
-    except Exception as e:
+    except UnicodeEncodeError as e:
+        logger.exception("保存附件元数据时编码错误: %s", e)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"保存附件元数据失败: {str(e)}"
+            detail="保存附件失败，请稍后重试"
+        )
+    except Exception as e:
+        logger.exception("保存附件元数据失败: %s", e)
+        db.rollback()
+        detail = "保存附件元数据失败，请稍后重试"
+        try:
+            err_str = str(e)
+            if err_str and "codec" not in err_str.lower():
+                detail = f"保存附件元数据失败: {err_str}"
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail
         )
 
 
@@ -296,6 +354,50 @@ async def download_attachment(
             "Content-Length": str(attachment.file_size)
         }
     )
+
+
+@router.delete("/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_attachment(
+    attachment_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teaching_office),
+):
+    """
+    教研室端删除附件
+    
+    - 仅允许删除未锁定自评表下的附件
+    - 同步删除 MinIO/本地存储中的文件
+    """
+    attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="附件不存在"
+        )
+    evaluation = db.query(SelfEvaluation).filter(
+        SelfEvaluation.id == attachment.evaluation_id
+    ).first()
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="自评表不存在"
+        )
+    if evaluation.status == "locked":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="自评表已锁定，无法删除附件"
+        )
+    storage_path = attachment.storage_path
+    try:
+        db.delete(attachment)
+        db.commit()
+        minio_service.delete_file(storage_path)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除附件失败: {str(e)}"
+        )
 
 
 @router.put("/attachments/{attachment_id}/classification", response_model=AttachmentClassificationResponse)

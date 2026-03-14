@@ -118,6 +118,7 @@
         <ManualScoringForm
           :evaluation-id="selectedEvaluationId"
           :current-user-role="currentUserRole"
+          :evaluation-status="selectedEvaluation?.status"
           @submitted="handleScoreSubmitted"
           @submitted-to-office="handleSubmittedToOffice"
         />
@@ -127,11 +128,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import ManualScoringForm from '@/components/ManualScoringForm.vue'
 import { scoringApi } from '@/api/client'
+
+const route = useRoute()
 
 // Evaluation interface
 interface Evaluation {
@@ -150,11 +154,33 @@ const selectedEvaluation = ref<Evaluation | null>(null)
 const currentUserRole = ref<'evaluation_team' | 'evaluation_office'>('evaluation_team')
 const loading = ref(false)
 
-// Load evaluations on mount
+// Load evaluations on mount；若 URL 带 evaluationId 则自动选中该考评（数据流通、状态正确）
 onMounted(async () => {
   await loadEvaluations()
   loadCurrentUserRole()
+  const idFromQuery = route.query.evaluationId as string | undefined
+  if (idFromQuery && evaluations.value.length) {
+    const found = evaluations.value.find((e: Evaluation) => e.id === idFromQuery)
+    if (found) {
+      selectedEvaluationId.value = found.id
+      selectedEvaluation.value = found
+    }
+  }
 })
+
+// 页面重新可见时刷新列表，保证状态为真实最新
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    loadEvaluations().then(() => {
+      if (selectedEvaluationId.value) {
+        const updated = evaluations.value.find((e: Evaluation) => e.id === selectedEvaluationId.value)
+        if (updated) selectedEvaluation.value = updated
+      }
+    })
+  }
+}
+onMounted(() => document.addEventListener('visibilitychange', onVisibilityChange))
+onUnmounted(() => document.removeEventListener('visibilitychange', onVisibilityChange))
 
 // Load evaluations from API
 const loadEvaluations = async () => {
@@ -163,29 +189,21 @@ const loadEvaluations = async () => {
     // 不传status参数，后端会默认返回 locked 和 ai_scored 状态的自评表
     const response = await scoringApi.getEvaluationsForScoring({})
     
-    // 处理不同的响应数据结构
-    if (Array.isArray(response.data)) {
-      evaluations.value = response.data
-    } else if (response.data.value && Array.isArray(response.data.value)) {
-      // PowerShell返回的数据结构包含value字段
-      evaluations.value = response.data.value
-    } else {
-      evaluations.value = []
-      console.warn('Unexpected response data structure:', response.data)
-    }
+    const raw = response.data
+    evaluations.value = Array.isArray(raw) ? raw : (raw?.items ?? raw?.value ?? raw?.list ?? [])
     
     console.log('Loaded evaluations:', evaluations.value.length)
   } catch (error: any) {
     console.error('Failed to load evaluations:', error)
     ElMessage.error(error.response?.data?.detail || '加载待评分列表失败')
+    evaluations.value = []
   } finally {
     loading.value = false
   }
 }
 
-// Load current user role
+// Load current user role（从本地存储恢复，与 auth store 一致）
 const loadCurrentUserRole = () => {
-  // Mock - Replace with actual user role from auth
   const role = localStorage.getItem('userRole')
   if (role === 'evaluation_team' || role === 'evaluation_office') {
     currentUserRole.value = role
@@ -198,66 +216,60 @@ const handleSelectEvaluation = (evaluation: Evaluation) => {
   selectedEvaluation.value = evaluation
 }
 
-// Handle back to list
-const handleBackToList = () => {
+// Handle back to list：返回时刷新列表，保证状态为最新
+const handleBackToList = async () => {
   selectedEvaluationId.value = ''
   selectedEvaluation.value = null
+  await loadEvaluations()
 }
 
-// Handle score submitted
-const handleScoreSubmitted = (scoreRecordId: string) => {
+// Handle score submitted：刷新列表并更新当前选中项状态，使状态立即显示「已评分」
+const handleScoreSubmitted = async (scoreRecordId: string) => {
   console.log('Score submitted:', scoreRecordId)
-  
-  // Optionally reload evaluations or update status
-  setTimeout(() => {
-    loadEvaluations()
-  }, 1000)
+  await new Promise(r => setTimeout(r, 600))
+  await loadEvaluations()
+  const id = String(selectedEvaluationId.value).trim()
+  const updated = evaluations.value.find((e: Evaluation) => String(e.id).trim() === id)
+  if (updated) selectedEvaluation.value = { ...updated }
 }
 
 // Handle submitted to office
-const handleSubmittedToOffice = (evaluationId: string) => {
+const handleSubmittedToOffice = async (evaluationId: string) => {
   console.log('Submitted to office:', evaluationId)
-  
-  // Reload evaluations and go back to list
-  setTimeout(() => {
-    loadEvaluations()
-    handleBackToList()
-  }, 1000)
+  await loadEvaluations()
+  // 用最新列表更新当前选中项状态，保证状态实时更新
+  const updated = evaluations.value.find((e: Evaluation) => e.id === evaluationId)
+  if (updated) selectedEvaluation.value = updated
+  setTimeout(() => handleBackToList(), 1000)
 }
 
-// Get status tag type
+// 手动评分列表状态规则（与产品一致）：
+// - 评分前：还没有评分（无人提交过手动评分）
+// - 已评分：已有人评分，未计算平均分/未提交到评教小组办公室
+// - 已提交：已提交到评教小组办公室端
 const getStatusTagType = (status: string): string => {
-  const types: Record<string, string> = {
-    'draft': 'info',
-    'submitted': '', // 使用自定义黄色样式
-    'locked': '', // 使用自定义黄色样式
-    'ai_scored': 'warning', // 橙色
-    'manually_scored': 'success', // 绿色
-    'ready_for_final': 'primary',
-    'finalized': 'success',
-    'published': 'success'
-  }
-  return types[status] || 'info'
+  const displayStatus = getManualScoringStatus(status)
+  const map: Record<string, string> = { '评分前': 'warning', '已评分': 'success', '已提交': 'primary' }
+  return map[displayStatus] || 'info'
 }
 
-// Get status label
 const getStatusLabel = (status: string): string => {
-  const labels: Record<string, string> = {
-    'draft': '草稿',
-    'submitted': '已提交',
-    'locked': '已提交',
-    'ai_scored': '待评分',
-    'manually_scored': '已评分',
-    'ready_for_final': '待最终确定',
-    'finalized': '已确定最终得分',
-    'published': '已公示'
-  }
-  return labels[status] || status
+  return getManualScoringStatus(status)
+}
+
+function getManualScoringStatus(status: string): '评分前' | '已评分' | '已提交' {
+  if (!status) return '评分前'
+  // 已评分：评分了、未提交到办公室（后端状态 manually_scored）
+  if (status === 'manually_scored') return '已评分'
+  // 已提交：已提交到评教小组办公室端
+  if (['ready_for_final', 'finalized', 'published', 'distributed'].includes(status)) return '已提交'
+  // 评分前：还没有评分（submitted, locked, ai_scored 等）
+  return '评分前'
 }
 
 // Get custom status class for yellow color
 const getStatusClass = (status: string): string => {
-  return (status === 'submitted' || status === 'locked') ? 'status-yellow' : ''
+  return getManualScoringStatus(status) === '评分前' ? 'status-yellow' : ''
 }
 
 // Format date - 显示真实时间格式 YYYY-MM-DD HH:mm:ss

@@ -11,8 +11,31 @@
         </div>
       </template>
 
+      <!-- 已提交提示：禁止再次修改 -->
+      <el-alert
+        v-if="hasSubmitted"
+        title="您已提交过评分，无法再次修改。"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="weight-alert"
+      />
       <!-- Weight Information -->
-      <el-alert v-if="currentUserRole" :title="weightInfo" type="info" :closable="false" show-icon class="weight-alert" />
+      <el-alert v-else-if="currentUserRole" :title="weightInfo" type="info" :closable="false" show-icon class="weight-alert" />
+
+      <!-- 评教小组平均分：评分完成后系统自动计算，提交到办公室时以此数据为准 -->
+      <el-alert
+        v-if="manualScoreAvg != null && manualReviewerCount > 0"
+        :title="`评教小组平均分：${manualScoreAvg.toFixed(1)} 分（共 ${manualReviewerCount} 人打分）`"
+        type="success"
+        :closable="false"
+        show-icon
+        class="weight-alert"
+      >
+        <template #default>
+          <span>提交到评教小组办公室时，将以此平均分及全部评分记录提交，数据实时计算、真实展示。</span>
+        </template>
+      </el-alert>
 
       <!-- 自评表内容与评分整合 -->
       <div v-loading="contentLoading" class="integrated-scoring">
@@ -150,6 +173,12 @@
             <span class="value">{{ totalScore.toFixed(1) }}</span>
             <span class="max">/ {{ maxTotalScore }}分</span>
           </div>
+          <!-- 评教小组平均分（多人打分时显示，提交后会自动刷新） -->
+          <div v-if="manualScoreAvg != null && manualReviewerCount > 0" class="manual-avg-score">
+            <span class="label">评教小组平均分：</span>
+            <span class="value">{{ manualScoreAvg.toFixed(1) }} 分</span>
+            <span class="meta">（共 {{ manualReviewerCount }} 人打分）</span>
+          </div>
         </div>
 
         <!-- Action Buttons -->
@@ -182,21 +211,30 @@
         <!-- Submit to Office Section (only for evaluation_team) -->
         <div v-if="props.currentUserRole === 'evaluation_team' && hasSubmitted" class="submit-office-section">
           <el-divider />
+          <el-alert
+            v-if="!canSubmitToOffice && props.evaluationStatus"
+            title="请先完成评教小组手动评分。评分完成后系统将自动计算所有成员平均分，届时方可提交到评教小组办公室。"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px;"
+          />
           <div class="submit-office-info">
-            <el-alert
-              title="考评小组评分完成"
-              type="info"
-              :closable="false"
-              show-icon
-              style="margin-bottom: 20px;"
-            >
-              请确认评分无误后，提交到考评办公室进行最终得分确定
-            </el-alert>
+          <el-alert
+            v-if="canSubmitToOffice"
+            title="评教小组评分完成，已计算平均分"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px;"
+          >
+            上方已显示评教小组平均分。确认无误后点击下方按钮，将该平均分及评分数据提交到评教小组办公室端，由办公室确定最终得分。
+          </el-alert>
             <el-button
               type="success"
               size="large"
               :loading="submittingToOffice"
-              :disabled="hasSubmittedToOffice"
+              :disabled="hasSubmittedToOffice || !canSubmitToOffice"
               @click="handleSubmitToOffice"
             >
               {{ hasSubmittedToOffice ? '已提交到考评办公室' : '提交到考评办公室' }}
@@ -407,6 +445,8 @@ import {
 interface Props {
   evaluationId: string
   currentUserRole?: 'evaluation_team' | 'evaluation_office'
+  /** 当前考评状态，用于控制「提交到考评办公室」是否可用 */
+  evaluationStatus?: string
 }
 
 const props = defineProps<Props>()
@@ -516,6 +556,12 @@ const weightInfo = computed(() => {
   return `您的评分权重为 ${weight}%。${props.currentUserRole === 'evaluation_team' ? '考评小组的评分权重高于考评办公室。' : ''}`
 })
 
+// 仅当「已手动评分」时允许提交：评分完成后系统计算评教小组平均分，再提交到办公室
+const canSubmitToOffice = computed(() => {
+  const s = props.evaluationStatus || evaluationStatus.value
+  return s === 'manually_scored'
+})
+
 // Computed: Sorted manual scores (evaluation_team first)
 const sortedManualScores = computed(() => {
   if (!allScoresData.value) {
@@ -538,6 +584,15 @@ const sortedManualScores = computed(() => {
   })
 })
 
+// 评教小组平均分（多人打分时的平均）
+const manualScoreAvg = computed(() => {
+  if (!allScoresData.value?.manual_scores?.length) return null
+  const totals = allScoresData.value.manual_scores.map(ms => calculateManualTotalScore(ms.scores))
+  const sum = totals.reduce((a, b) => a + b, 0)
+  return sum / totals.length
+})
+const manualReviewerCount = computed(() => allScoresData.value?.manual_scores?.length ?? 0)
+
 // Validation rules - 使用动态规则，在提交时手动验证
 const rules = reactive<FormRules>({})
 
@@ -555,17 +610,24 @@ function calculateManualTotalScore(scores: IndicatorScore[]): number {
   return scores.reduce((sum, score) => sum + score.score, 0)
 }
 
+// 负面清单与亮点工作为选填，其余为必填
+const OPTIONAL_INDICATOR_KEYS = new Set([
+  'ethicsViolations', 'teachingAccidents', 'ideologyIssues', 'workloadIncomplete', // 负面清单
+  'teachingReformProjects', 'teachingHonors', 'teachingCompetitions', 'innovationCompetitions'  // 亮点工作
+])
+
 // Handle submit
 const handleSubmit = async () => {
   try {
-    // 手动验证：确保所有评分项都有评分和评语
+    // 手动验证：必填项须有评分和评语；负面清单、亮点工作为选填
     const scoreEntries = Object.entries(formData.scores)
     if (scoreEntries.length === 0) {
       ElMessage.error('请先加载自评表内容后再提交评分')
       return
     }
 
-    const emptyComment = scoreEntries.find(([, val]) => !val.comment || val.comment.trim().length < 2)
+    const requiredEntries = scoreEntries.filter(([key]) => !OPTIONAL_INDICATOR_KEYS.has(String(key)))
+    const emptyComment = requiredEntries.find(([, val]) => !val.comment || val.comment.trim().length < 2)
     if (emptyComment) {
       const label = getItemLabel(emptyComment[0])
       ElMessage.error(`请填写「${label}」的评分原因（至少2个字符）`)
@@ -585,12 +647,16 @@ const handleSubmit = async () => {
 
     submitting.value = true
 
-    // 直接从 formData.scores 中收集评分数据（key 为自评表字段名）
-    const scores: IndicatorScore[] = Object.entries(formData.scores).map(([key, val]) => ({
-      indicator: getItemLabel(key),  // 转为中文标签作为指标名
-      score: val.score,
-      comment: val.comment
-    }))
+    // 直接从 formData.scores 中收集评分数据（key 为自评表字段名）；选填项无评语时用占位符
+    const scores: IndicatorScore[] = Object.entries(formData.scores).map(([key, val]) => {
+      const isOptional = OPTIONAL_INDICATOR_KEYS.has(String(key))
+      const comment = (val.comment && val.comment.trim()) ? val.comment.trim() : (isOptional ? '选填未填' : '')
+      return {
+        indicator: getItemLabel(key),
+        score: val.score,
+        comment
+      }
+    })
 
     const requestData: ManualScoreCreate = {
       evaluation_id: props.evaluationId,
@@ -602,8 +668,14 @@ const handleSubmit = async () => {
 
     hasSubmitted.value = true
 
+    // 立即重新拉取全部评分，用于更新「评教小组平均分」显示
+    try {
+      const res = await scoringApi.getAllScores(props.evaluationId)
+      if (res.data) allScoresData.value = res.data
+    } catch (_) {}
+
     ElMessage.success({
-      message: '评分提交成功！评分记录已保存，无法修改。',
+      message: '评分提交成功！评分记录已保存，系统已更新评教小组平均分。',
       duration: 5000,
       showClose: true
     })
@@ -687,8 +759,10 @@ const handleSubmitToOffice = async () => {
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('Submit to office failed:', error)
-
-      const errorMessage = error.response?.data?.detail || '提交失败，请重试'
+      const detail = error.response?.data?.detail
+      const errorMessage =
+        (typeof detail === 'object' && detail?.message) ? detail.message
+          : (typeof detail === 'string' ? detail : null) || '提交失败，请重试'
 
       ElMessage.error({
         message: errorMessage,
@@ -713,9 +787,9 @@ const handleViewAllScores = async () => {
     // Check if current user has already submitted
     if (allScoresData.value) {
       if (props.currentUserRole && allScoresData.value.manual_scores.length > 0) {
-        const currentUserId = localStorage.getItem('userId') // Assuming userId is stored
+        const currentUserId = localStorage.getItem('userId') || ''
         const hasUserSubmitted = allScoresData.value.manual_scores.some(
-          score => score.reviewer_id === currentUserId
+          (score: { reviewer_id: string }) => String(score.reviewer_id) === String(currentUserId)
         )
         if (hasUserSubmitted) {
           hasSubmitted.value = true
@@ -811,9 +885,9 @@ const getSectionTitle = (sectionKey: string | number): string => {
     'facultyDevelopment': '师资队伍建设',
     'teachingResources': '教学资源建设',
     'positiveList': '正面清单',
-    'negativeList': '负面清单',
+    'negativeList': '负面清单（选填）',
     'regularTeaching': '日常教学',
-    'highlights': '亮点工作',
+    'highlights': '亮点工作（选填）',
     'teachingOfficeId': '教研室编号',
     'evaluationYear': '考评年度'
   }
@@ -921,6 +995,23 @@ onMounted(async () => {
     loadSelfEvaluation(),  // 这个函数内部会调用 initializeFormData()
     loadAttachments()
   ])
+  // 进入页面时检查当前用户是否已提交过评分，并拉取所有评分用于显示评教小组平均分
+  try {
+    const res = await scoringApi.getAllScores(props.evaluationId)
+    const data = res.data
+    if (data) {
+      allScoresData.value = data
+      if (data.manual_scores?.length && props.currentUserRole) {
+        const currentUserId = localStorage.getItem('userId') || ''
+        const already = data.manual_scores.some(
+          (score: { reviewer_id: string }) => String(score.reviewer_id) === String(currentUserId)
+        )
+        if (already) hasSubmitted.value = true
+      }
+    }
+  } catch (_) {
+    // 仅用于设置 hasSubmitted，忽略错误
+  }
 })
 
 // Expose methods
@@ -1231,6 +1322,20 @@ defineExpose({
   font-size: 18px;
   opacity: 0.9;
 }
+
+.manual-avg-score {
+  text-align: center;
+  font-size: 16px;
+  padding: 14px 25px;
+  margin-top: 12px;
+  background: rgba(103, 194, 58, 0.15);
+  border: 1px solid rgba(103, 194, 58, 0.4);
+  border-radius: 8px;
+  color: #2d5a27;
+}
+.manual-avg-score .label { font-weight: 500; }
+.manual-avg-score .value { font-weight: bold; font-size: 20px; margin: 0 6px; }
+.manual-avg-score .meta { font-size: 13px; color: #606266; }
 
 .form-actions {
   margin-top: 30px;

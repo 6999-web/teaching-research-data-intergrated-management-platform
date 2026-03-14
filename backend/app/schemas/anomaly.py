@@ -18,7 +18,7 @@ class AnomalyResponse(BaseModel):
     indicator: str = Field(..., description="考核指标")
     declared_count: Optional[int] = Field(None, description="自评表声明的数量")
     parsed_count: Optional[int] = Field(None, description="AI解析出的数量")
-    description: str = Field(..., description="清晰的对比说明")
+    description: Optional[str] = Field("", description="清晰的对比说明")
     status: str = Field(..., description="状态: pending, handled")
     handled_by: Optional[UUID] = Field(None, description="处理人ID")
     handled_action: Optional[str] = Field(None, description="处理动作: reject, correct")

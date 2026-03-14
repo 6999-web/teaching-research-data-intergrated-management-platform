@@ -94,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -120,6 +120,11 @@ import {
 const router = useRouter()
 const authStore = useAuthStore()
 
+// 刷新页面时从 localStorage 恢复登录状态，避免主内容区空白
+onMounted(() => {
+  authStore.loadFromStorage()
+})
+
 const activeMenu = ref(0)
 const activeTab = ref(0)
 
@@ -128,18 +133,16 @@ const menuItems = computed(() => {
   const role = authStore.userRole
   
   if (role === 'evaluation_team') {
-    // 评教小组：手动评分相关功能
+    // 评教小组：仅保留评分管理和评分记录，移除“异常处理”
     return [
       { name: '评分管理', icon: Medal },
-      { name: '异常处理', icon: Warning },
       { name: '评分记录', icon: Document }
     ]
   } else if (role === 'evaluation_office') {
-    // 评教小组办公室：公示管理、数据同步功能
+    // 评教小组办公室：发起公示 + 数据传递到校长办
     return [
       { name: '公示管理', icon: Promotion },
-      { name: '数据同步', icon: Connection },
-      { name: '附件管理', icon: FolderOpened }
+      { name: '数据同步', icon: Connection }
     ]
   } else if (role === 'president_office') {
     // 校长办公会：数据看板、最终结果查看功能
@@ -158,16 +161,12 @@ const tabsConfig = computed(() => {
   const role = authStore.userRole
   
   if (role === 'evaluation_team') {
+    // 评教小组：评分管理 + 评分记录
     return [
       // 评分管理
       [
         { name: '手动评分', icon: Checked, description: '对各个教研室上传的考评表进行手动评分' },
         { name: '最终得分', icon: Medal, description: '综合所有评分确定最终结果' }
-      ],
-      // 异常处理
-      [
-        { name: '异常数据', icon: Warning, description: '查看AI标记的异常数据' },
-        { name: '处理记录', icon: Document, description: '查看异常数据处理记录' }
       ],
       // 评分记录
       [
@@ -176,21 +175,16 @@ const tabsConfig = computed(() => {
       ]
     ]
   } else if (role === 'evaluation_office') {
+    // 评教小组办公室：发起公示 + 公示状态 + 将结果传递到校长办公室端
     return [
-      // 公示管理
+      // 公示管理（发起公示 -> 教研室端结果查看；公示状态）
       [
-        { name: '发起公示', icon: Promotion, description: '公示考评结果，透明公开' },
-        { name: '公示状态', icon: View, description: '查看公示进度和状态' }
+        { name: '发起公示', icon: Promotion, description: '将最终成绩公示，并发送到教研室端结果查看', routeOverride: '/publication' } as any,
+        { name: '公示状态', icon: View, description: '查看各教研室公示进度和状态', routeOverride: '/publication' } as any
       ],
-      // 数据同步
+      // 数据同步（将结果传递到校长办公室端）
       [
-        { name: '同步到校长办公会', icon: Connection, description: '将结果上传到校长办公会端' },
-        { name: '同步记录', icon: Document, description: '查看数据同步历史记录' }
-      ],
-      // 附件管理
-      [
-        { name: '附件列表', icon: FolderOpened, description: '查看和管理所有附件' },
-        { name: '附件审核', icon: Checked, description: '审核教研室提交的附件' }
+        { name: '同步到校长办公会', icon: Connection, description: '将最终结果同步到校长办公室端', routeOverride: '/data-sync' } as any
       ]
     ]
   } else if (role === 'president_office') {
@@ -226,71 +220,40 @@ const functionsConfig = computed(() => {
       [
         [
           { name: '手动评分', description: '对各个教研室上传的考评表进行手动评分', icon: Checked, route: '/manual-scoring' },
-          { name: '评分进度', description: '查看当前评分进度和待评分项', icon: TrendCharts, route: '/management-results' },
-          { name: '评分规则', description: '查看评分标准和规则说明', icon: Document, route: '#' }
+          { name: '评分进度', description: '查看当前评分进度和待评分项', icon: TrendCharts, route: '/scoring-progress' },
+          { name: '评分规则', description: '查看评分标准和规则说明', icon: Document, route: '/scoring-rules' },
+          { name: '提交评教数据到评教办公室', description: '将评教数据上传到评教办公室端进行最终得分确定', icon: Connection, route: '/submit-to-office' }
         ],
         [
           { name: '最终得分确定', description: '综合所有评分确定最终结果', icon: Medal, route: '/final-score' },
           { name: '得分统计', description: '查看各教研室得分统计', icon: DataAnalysis, route: '/management-results' }
         ]
       ],
-      // 异常处理
-      [
-        [
-          { name: '异常数据列表', description: '查看AI标记的异常数据', icon: Warning, route: '/anomaly-handling' },
-          { name: '异常分析', description: '分析异常数据的原因和趋势', icon: TrendCharts, route: '#' }
-        ],
-        [
-          { name: '处理记录', description: '查看异常数据处理记录', icon: Document, route: '/anomaly-handling' },
-          { name: '处理统计', description: '统计异常处理情况', icon: DataAnalysis, route: '#' }
-        ]
-      ],
       // 评分记录
       [
         [
-          { name: '我的评分记录', description: '查看我的所有评分记录', icon: Document, route: '/management-results' },
-          { name: '评分详情', description: '查看每次评分的详细信息', icon: View, route: '/management-results' }
+          { name: '我的评分记录', description: '查看我的所有评分记录', icon: Document, route: '/my-scoring-records' }
         ],
         [
-          { name: '全部评分记录', description: '查看所有评审人打分记录', icon: FolderOpened, route: '/management-results' },
-          { name: '评分对比', description: '对比不同评审人的评分差异', icon: TrendCharts, route: '#' }
+          { name: '全部评分记录', description: '查看所有评审人打分记录', icon: FolderOpened, route: '/all-scoring-records' },
+          { name: '评分对比', description: '对比不同评审人的评分差异', icon: TrendCharts, route: '/all-scoring-records?tab=compare' }
         ]
       ]
     ]
   } else if (role === 'evaluation_office') {
+    // 评教小组办公室：仅保留“发起公示 / 公示状态 / 同步到校长办公会”
     return [
       // 公示管理
       [
         [
-          { name: '发起公示', description: '公示考评结果，透明公开', icon: Promotion, route: '/publication' },
-          { name: '公示预览', description: '预览公示内容', icon: View, route: '/publication' },
-          { name: '公示设置', description: '配置公示范围和时间', icon: Setting, route: '#' }
-        ],
-        [
-          { name: '公示状态', description: '查看公示进度和状态', icon: View, route: '/publication' },
-          { name: '公示反馈', description: '查看公示后的反馈意见', icon: Document, route: '#' }
+          { name: '发起公示', description: '将最终成绩公示，并发送到教研室端结果查看', icon: Promotion, route: '/publication' },
+          { name: '公示状态', description: '查看各教研室公示进度和状态', icon: View, route: '/publication' }
         ]
       ],
       // 数据同步
       [
         [
-          { name: '同步到校长办公会', description: '将结果上传到校长办公会端', icon: Connection, route: '/data-sync' },
-          { name: '同步配置', description: '配置数据同步规则', icon: Setting, route: '#' }
-        ],
-        [
-          { name: '同步记录', description: '查看数据同步历史记录', icon: Document, route: '/data-sync' },
-          { name: '同步状态', description: '查看当前同步任务状态', icon: Monitor, route: '/data-sync' }
-        ]
-      ],
-      // 附件管理
-      [
-        [
-          { name: '附件列表', description: '查看和管理所有附件', icon: FolderOpened, route: '/attachment-management' },
-          { name: '附件分类', description: '按类型查看附件', icon: Document, route: '/attachment-management' }
-        ],
-        [
-          { name: '附件审核', description: '审核教研室提交的附件', icon: Checked, route: '/attachment-management' },
-          { name: '附件统计', description: '统计附件提交情况', icon: DataAnalysis, route: '#' }
+          { name: '同步到校长办公会', description: '将最终结果同步到校长办公室端', icon: Connection, route: '/data-sync' }
         ]
       ]
     ]
@@ -353,6 +316,7 @@ const selectMenu = (index: number) => {
 const goToHome = () => {
   activeMenu.value = 0
   activeTab.value = 0
+  router.push('/management-home').catch(() => {})
 }
 
 const navigateTo = (route: string) => {

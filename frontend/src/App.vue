@@ -68,4 +68,25 @@ body {
 .el-card:hover {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
+
+/* 评教小组办公室端面包屑统一样式：首页加粗深色，后续项灰色，无下划线 */
+.management-breadcrumb.el-breadcrumb {
+  font-size: 14px;
+}
+.management-breadcrumb .el-breadcrumb__item:first-child .el-breadcrumb__inner {
+  font-weight: bold;
+  color: #333333;
+  text-decoration: none;
+}
+.management-breadcrumb .el-breadcrumb__item:not(:first-child) .el-breadcrumb__inner {
+  color: #666666;
+  font-weight: normal;
+  text-decoration: none;
+}
+.management-breadcrumb .el-breadcrumb__item:not(:first-child) .el-breadcrumb__inner:hover {
+  color: #409eff;
+}
+.management-breadcrumb .el-breadcrumb__separator {
+  color: #999999;
+}
 </style>

@@ -1,11 +1,12 @@
 <template>
   <div class="management-result-page">
     <div class="page-header">
-      <h1>考评结果汇总</h1>
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item :to="{ path: '/' }">
-          首页
-        </el-breadcrumb-item>
+      <div class="header-row">
+        <h1>考评结果汇总</h1>
+        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+      </div>
+      <el-breadcrumb class="management-breadcrumb" separator="/">
+        <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
         <el-breadcrumb-item>管理端</el-breadcrumb-item>
         <el-breadcrumb-item>结果汇总</el-breadcrumb-item>
       </el-breadcrumb>
@@ -560,79 +561,7 @@ const loadResults = async () => {
   } catch (error: any) {
     console.error('Failed to load results:', error)
     ElMessage.error('加载考评结果失败')
-    
-    // Fallback to mock data for development
-    results.value = [
-      {
-        id: '1',
-        teaching_office_id: 'to1',
-        teaching_office_name: '计算机科学教研室',
-        evaluation_year: 2024,
-        final_score: 92.5,
-        ai_score: 90.0,
-        manual_score_avg: 93.5,
-        approval_status: 'approved',
-        status: 'published',
-        summary: '该教研室在教学改革、课程建设等方面表现突出，综合评分优秀。',
-        approved_at: '2024-01-25T10:30:00',
-        published_at: '2024-01-26T09:00:00'
-      },
-      {
-        id: '2',
-        teaching_office_id: 'to2',
-        teaching_office_name: '数学教研室',
-        evaluation_year: 2024,
-        final_score: 88.3,
-        ai_score: 87.5,
-        manual_score_avg: 89.0,
-        approval_status: 'approved',
-        status: 'published',
-        summary: '该教研室整体表现良好，建议加强教学改革项目申报。',
-        approved_at: '2024-01-25T14:20:00',
-        published_at: '2024-01-26T09:00:00'
-      },
-      {
-        id: '3',
-        teaching_office_id: 'to3',
-        teaching_office_name: '物理教研室',
-        evaluation_year: 2024,
-        final_score: 90.1,
-        ai_score: 89.0,
-        manual_score_avg: 91.0,
-        approval_status: 'approved',
-        status: 'published',
-        summary: '该教研室在实验教学和科研方面成绩显著。',
-        approved_at: '2024-01-24T09:15:00',
-        published_at: '2024-01-26T09:00:00'
-      },
-      {
-        id: '4',
-        teaching_office_id: 'to4',
-        teaching_office_name: '化学教研室',
-        evaluation_year: 2024,
-        final_score: 85.7,
-        ai_score: 84.0,
-        manual_score_avg: 87.0,
-        approval_status: 'approved',
-        status: 'finalized',
-        summary: '该教研室需要在教学质量监控方面加强工作。',
-        approved_at: '2024-01-25T16:45:00'
-      },
-      {
-        id: '5',
-        teaching_office_id: 'to5',
-        teaching_office_name: '英语教研室',
-        evaluation_year: 2024,
-        final_score: 78.5,
-        ai_score: 80.0,
-        manual_score_avg: 77.5,
-        approval_status: 'rejected',
-        status: 'finalized',
-        summary: '该教研室在多个考核指标上未达标。',
-        approved_at: '2024-01-25T11:20:00',
-        reject_reason: '教学改革项目数量不足，荣誉表彰材料存在疑问，需要补充完善相关材料后重新提交审核。'
-      }
-    ]
+    results.value = []
   } finally {
     loading.value = false
   }
@@ -675,10 +604,69 @@ const viewRejectReason = (result: ManagementResult) => {
   rejectDialogVisible.value = true
 }
 
-// Export results
+// Export results as Word document (HTML format that Word can open)
 const exportResults = () => {
-  ElMessage.info('导出功能开发中...')
-  // TODO: Implement export functionality
+  const list = sortedResults.value.length ? sortedResults.value : results.value
+  if (!list.length) {
+    ElMessage.warning('暂无数据可导出')
+    return
+  }
+  const year = filters.value.year || new Date().getFullYear()
+  const statusLabels: Record<string, string> = {
+    published: '已公示',
+    finalized: '已确定最终得分',
+    approved: '已审定',
+    manually_scored: '已手动评分',
+    rejected: '已驳回',
+    pending: '待审定'
+  }
+  const rows = list.map((r: ManagementResult, i: number) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${(r as any).teaching_office_name ?? r.teaching_office_name ?? '-'}</td>
+      <td>${(r as any).evaluation_year ?? r.evaluation_year ?? '-'}</td>
+      <td>${r.final_score != null ? Number(r.final_score).toFixed(1) : '-'}</td>
+      <td>${r.ai_score != null ? Number(r.ai_score).toFixed(1) : '-'}</td>
+      <td>${r.manual_score_avg != null ? Number(r.manual_score_avg).toFixed(1) : '-'}</td>
+      <td>${statusLabels[(r as any).approval_status] ?? (r as any).approval_status ?? '-'}</td>
+      <td>${statusLabels[(r as any).status] ?? (r as any).status ?? '-'}</td>
+      <td>${(r as any).summary ?? r.summary ?? '-'}</td>
+    </tr>`).join('')
+  const html = `
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+  <meta charset="UTF-8"/>
+  <title>教研室考评结果汇总</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #333; padding: 6px 10px; text-align: left; }
+    th { background: #f0f0f0; font-weight: bold; }
+    h1 { font-size: 18px; }
+    .meta { margin-bottom: 16px; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>教研室考评结果汇总</h1>
+  <p class="meta">导出时间：${new Date().toLocaleString('zh-CN')} &nbsp;|&nbsp; 考评年度：${year} &nbsp;|&nbsp; 共 ${list.length} 条</p>
+  <table>
+    <thead>
+      <tr>
+        <th>排名</th><th>教研室名称</th><th>考评年度</th><th>最终得分</th><th>AI评分</th><th>人工评分均值</th><th>审定结果</th><th>状态</th><th>汇总说明</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`
+  const blob = new Blob(['\ufeff' + html], { type: 'application/msword' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `教研室考评结果汇总_${year}.doc`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('已导出 Word 文档')
 }
 
 // Get score tag type
@@ -753,6 +741,29 @@ const formatDate = (dateStr: string): string => {
 
 .page-header {
   margin-bottom: 20px;
+}
+
+.page-header .header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-header .header-row h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #303133;
+}
+
+.back-home-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.back-home-link:hover {
+  text-decoration: underline;
 }
 
 .page-header h1 {

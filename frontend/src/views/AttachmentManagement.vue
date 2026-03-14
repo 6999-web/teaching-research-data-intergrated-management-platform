@@ -2,7 +2,10 @@
   <div class="attachment-management-view">
     <el-card class="header-card">
       <div class="header-content">
-        <h2>附件管理</h2>
+        <div class="header-row">
+          <h2>附件管理</h2>
+          <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+        </div>
         <p class="subtitle">
           查阅和下载所有归档附件
         </p>
@@ -356,7 +359,27 @@ onMounted(async () => {
 }
 
 .header-content {
-  text-align: center;
+  text-align: left;
+}
+
+.header-content .header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.header-content .header-row h2 {
+  margin: 0;
+}
+
+.back-home-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-home-link:hover {
+  text-decoration: underline;
 }
 
 .header-content h2 {

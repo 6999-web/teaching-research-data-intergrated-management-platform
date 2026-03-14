@@ -56,8 +56,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="teachingProcessFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teachingProcessManagement')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teachingProcessManagement')"
+                :on-change="onTeachingProcessChange"
+                :on-remove="onTeachingProcessRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -82,7 +82,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, teachingProcessFiles, 'teachingProcessManagement')"
+                    @click="handleInlineFileRemove(file, 'teachingProcessManagement')"
                   />
                 </div>
               </div>
@@ -128,8 +128,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="teachingQualityFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teachingQualityManagement')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teachingQualityManagement')"
+                :on-change="onTeachingQualityChange"
+                :on-remove="onTeachingQualityRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -153,7 +153,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, teachingQualityFiles, 'teachingQualityManagement')"
+                    @click="handleInlineFileRemove(file, 'teachingQualityManagement')"
                   />
                 </div>
               </div>
@@ -199,8 +199,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="courseAssessmentFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'courseAssessment')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'courseAssessment')"
+                :on-change="onCourseAssessmentChange"
+                :on-remove="onCourseAssessmentRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -224,7 +224,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, courseAssessmentFiles, 'courseAssessment')"
+                    @click="handleInlineFileRemove(file, 'courseAssessment')"
                   />
                 </div>
               </div>
@@ -270,8 +270,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="educationResearchFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'educationResearch')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'educationResearch')"
+                :on-change="onEducationResearchChange"
+                :on-remove="onEducationResearchRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -295,7 +295,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, educationResearchFiles, 'educationResearch')"
+                    @click="handleInlineFileRemove(file, 'educationResearch')"
                   />
                 </div>
               </div>
@@ -341,8 +341,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="courseConstructionFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'courseConstruction')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'courseConstruction')"
+                :on-change="onCourseConstructionChange"
+                :on-remove="onCourseConstructionRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -366,7 +366,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, courseConstructionFiles, 'courseConstruction')"
+                    @click="handleInlineFileRemove(file, 'courseConstruction')"
                   />
                 </div>
               </div>
@@ -412,8 +412,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="teacherTeamBuildingFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teacherTeamBuilding')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teacherTeamBuilding')"
+                :on-change="onTeacherTeamBuildingChange"
+                :on-remove="onTeacherTeamBuildingRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -437,7 +437,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, teacherTeamBuildingFiles, 'teacherTeamBuilding')"
+                    @click="handleInlineFileRemove(file, 'teacherTeamBuilding')"
                   />
                 </div>
               </div>
@@ -483,8 +483,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="researchAndExchangeFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'researchAndExchange')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'researchAndExchange')"
+                :on-change="onResearchAndExchangeChange"
+                :on-remove="onResearchAndExchangeRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -508,7 +508,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, researchAndExchangeFiles, 'researchAndExchange')"
+                    @click="handleInlineFileRemove(file, 'researchAndExchange')"
                   />
                 </div>
               </div>
@@ -554,8 +554,8 @@
                 :auto-upload="false"
                 :multiple="true"
                 :file-list="archiveManagementFiles"
-                :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'archiveManagement')"
-                :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'archiveManagement')"
+                :on-change="onArchiveManagementChange"
+                :on-remove="onArchiveManagementRemove"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 :limit="5"
                 :on-exceed="handleInlineExceed"
@@ -579,7 +579,7 @@
                     :icon="Delete"
                     size="small"
                     link
-                    @click="handleInlineFileRemove(file, archiveManagementFiles, 'archiveManagement')"
+                    @click="handleInlineFileRemove(file, 'archiveManagement')"
                   />
                 </div>
               </div>
@@ -686,8 +686,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="reformProjectsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'reformProjects')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'reformProjects')"
+              :on-change="onReformProjectsChange"
+              :on-remove="onReformProjectsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -711,7 +711,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, reformProjectsFiles, 'reformProjects')"
+                  @click="handleInlineFileRemove(file, 'reformProjects')"
                 />
               </div>
             </div>
@@ -798,8 +798,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="teachingHonorsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teachingHonors')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teachingHonors')"
+              :on-change="onTeachingHonorsChange"
+              :on-remove="onTeachingHonorsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -823,7 +823,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, teachingHonorsFiles, 'teachingHonors')"
+                  @click="handleInlineFileRemove(file, 'teachingHonors')"
                 />
               </div>
             </div>
@@ -916,8 +916,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="teachingCompetitionsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teachingCompetitions')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teachingCompetitions')"
+              :on-change="onTeachingCompetitionsChange"
+              :on-remove="onTeachingCompetitionsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -941,7 +941,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, teachingCompetitionsFiles, 'teachingCompetitions')"
+                  @click="handleInlineFileRemove(file, 'teachingCompetitions')"
                 />
               </div>
             </div>
@@ -1034,8 +1034,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="innovationCompetitionsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'innovationCompetitions')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'innovationCompetitions')"
+              :on-change="onInnovationCompetitionsChange"
+              :on-remove="onInnovationCompetitionsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -1059,7 +1059,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, innovationCompetitionsFiles, 'innovationCompetitions')"
+                  @click="handleInlineFileRemove(file, 'innovationCompetitions')"
                 />
               </div>
             </div>
@@ -1113,8 +1113,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="ethicsViolationsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'ethicsViolations')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'ethicsViolations')"
+              :on-change="onEthicsViolationsChange"
+              :on-remove="onEthicsViolationsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -1138,7 +1138,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, ethicsViolationsFiles, 'ethicsViolations')"
+                  @click="handleInlineFileRemove(file, 'ethicsViolations')"
                 />
               </div>
             </div>
@@ -1171,8 +1171,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="teachingAccidentsFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'teachingAccidents')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'teachingAccidents')"
+              :on-change="onTeachingAccidentsChange"
+              :on-remove="onTeachingAccidentsRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -1196,7 +1196,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, teachingAccidentsFiles, 'teachingAccidents')"
+                  @click="handleInlineFileRemove(file, 'teachingAccidents')"
                 />
               </div>
             </div>
@@ -1232,8 +1232,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="ideologyIssuesFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'ideologyIssues')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'ideologyIssues')"
+              :on-change="onIdeologyIssuesChange"
+              :on-remove="onIdeologyIssuesRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -1257,7 +1257,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, ideologyIssuesFiles, 'ideologyIssues')"
+                  @click="handleInlineFileRemove(file, 'ideologyIssues')"
                 />
               </div>
             </div>
@@ -1293,8 +1293,8 @@
               :auto-upload="false"
               :multiple="true"
               :file-list="workloadIncompleteFiles"
-              :on-change="(file: any, fileList: any) => handleInlineFileChange(file, fileList, 'workloadIncomplete')"
-              :on-remove="(file: any, fileList: any) => handleInlineFileRemove(file, fileList, 'workloadIncomplete')"
+              :on-change="onWorkloadIncompleteChange"
+              :on-remove="onWorkloadIncompleteRemove"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
               :limit="5"
               :on-exceed="handleInlineExceed"
@@ -1318,7 +1318,7 @@
                   :icon="Delete"
                   size="small"
                   link
-                  @click="handleInlineFileRemove(file, workloadIncompleteFiles, 'workloadIncomplete')"
+                  @click="handleInlineFileRemove(file, 'workloadIncomplete')"
                 />
               </div>
             </div>
@@ -1379,7 +1379,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, type Ref } from 'vue'
 import { UploadFilled, Upload, Document, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type UploadInstance, type UploadUserFile } from 'element-plus'
 import apiClient from '@/api/client'
@@ -1425,6 +1425,73 @@ const ethicsViolationsFiles = ref<UploadUserFile[]>([])
 const teachingAccidentsFiles = ref<UploadUserFile[]>([])
 const ideologyIssuesFiles = ref<UploadUserFile[]>([])
 const workloadIncompleteFiles = ref<UploadUserFile[]>([])
+
+// 预绑定的上传 change 处理函数（块体、不返回值，避免被误当作可链式调用导致 TypeError）
+const onTeachingProcessChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teachingProcessManagement')
+}
+const onTeachingQualityChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teachingQualityManagement')
+}
+const onCourseAssessmentChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'courseAssessment')
+}
+const onEducationResearchChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'educationResearch')
+}
+const onCourseConstructionChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'courseConstruction')
+}
+const onTeacherTeamBuildingChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teacherTeamBuilding')
+}
+const onResearchAndExchangeChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'researchAndExchange')
+}
+const onArchiveManagementChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'archiveManagement')
+}
+const onReformProjectsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'reformProjects')
+}
+const onTeachingHonorsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teachingHonors')
+}
+const onTeachingCompetitionsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teachingCompetitions')
+}
+const onInnovationCompetitionsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'innovationCompetitions')
+}
+const onEthicsViolationsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'ethicsViolations')
+}
+const onTeachingAccidentsChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'teachingAccidents')
+}
+const onIdeologyIssuesChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'ideologyIssues')
+}
+const onWorkloadIncompleteChange = (uploadFile: UploadUserFile, uploadFiles?: UploadUserFile[]) => {
+  handleInlineFileChange(uploadFile, uploadFiles, 'workloadIncomplete')
+}
+
+const onTeachingProcessRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teachingProcessManagement')
+const onTeachingQualityRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teachingQualityManagement')
+const onCourseAssessmentRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'courseAssessment')
+const onEducationResearchRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'educationResearch')
+const onCourseConstructionRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'courseConstruction')
+const onTeacherTeamBuildingRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teacherTeamBuilding')
+const onResearchAndExchangeRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'researchAndExchange')
+const onArchiveManagementRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'archiveManagement')
+const onReformProjectsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'reformProjects')
+const onTeachingHonorsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teachingHonors')
+const onTeachingCompetitionsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teachingCompetitions')
+const onInnovationCompetitionsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'innovationCompetitions')
+const onEthicsViolationsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'ethicsViolations')
+const onTeachingAccidentsRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'teachingAccidents')
+const onIdeologyIssuesRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'ideologyIssues')
+const onWorkloadIncompleteRemove = (uploadFile: UploadUserFile) => handleInlineFileRemove(uploadFile, 'workloadIncomplete')
 
 // State
 const formData = reactive({
@@ -1787,174 +1854,218 @@ const calculateFinalScore = () => {
   )
 }
 
+// 考核指标中文名映射（模块级常量，避免在 change 回调内创建对象导致 "(intermediate value) is not a function"）
+const FIELD_NAME_MAP: Record<string, string> = {
+  teachingProcessManagement: '教学过程管理',
+  teachingQualityManagement: '教学质量管理',
+  courseAssessment: '课程考核',
+  educationResearch: '教育教学科研工作',
+  courseConstruction: '课程建设',
+  teacherTeamBuilding: '教师队伍建设',
+  researchAndExchange: '科学研究与学术交流',
+  archiveManagement: '教学档案室管理与建设',
+  reformProjects: '教学改革项目',
+  teachingHonors: '年度获得教学相关荣誉表彰',
+  teachingCompetitions: '教学比赛',
+  innovationCompetitions: '指导创新创业比赛获奖情况',
+  ethicsViolations: '师德师风违规',
+  teachingAccidents: '教学事故',
+  ideologyIssues: '意识形态问题',
+  workloadIncomplete: '工作量未完成'
+}
+
 // Inline attachment upload methods
-const handleInlineFileChange = (file: UploadUserFile, fileList: UploadUserFile[], fieldKey: string) => {
+function createInlineFileChangeHandler(fieldKey: string) {
+  return (uploadFile: UploadUserFile, uploadFiles: UploadUserFile[] | undefined) => {
+    handleInlineFileChange(uploadFile, uploadFiles, fieldKey)
+  }
+}
+
+function handleInlineFileChange(file: UploadUserFile, fileList: UploadUserFile[] | undefined, fieldKey: string) {
+  if (!file?.name) return
+  // 兼容只传 file 不传 fileList 的调用方式，避免列表被误清空
+  const list = Array.isArray(fileList) && fileList.length > 0 ? fileList : (file ? [file] : [])
   // Validate file size (50MB)
   const maxSize = 50 * 1024 * 1024
   if (file.size && file.size > maxSize) {
     ElMessage.error(`文件 ${file.name} 大小超过50MB限制`)
-    // Remove the file from list
-    const index = fileList.findIndex(f => f.uid === file.uid)
-    if (index > -1) {
-      fileList.splice(index, 1)
-    }
+    const index = list.findIndex((f: UploadUserFile) => f.uid === file.uid)
+    if (index > -1) list.splice(index, 1)
     return
   }
-  
   // Validate file type
   const allowedTypes = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']
   const fileExt = file.name.split('.').pop()?.toLowerCase()
   if (fileExt && !allowedTypes.includes(fileExt)) {
     ElMessage.error(`文件 ${file.name} 格式不支持，请上传 PDF、Word、Excel 或图片格式的文件`)
-    // Remove the file from list
-    const index = fileList.findIndex(f => f.uid === file.uid)
-    if (index > -1) {
-      fileList.splice(index, 1)
-    }
+    const index = list.findIndex((f: UploadUserFile) => f.uid === file.uid)
+    if (index > -1) list.splice(index, 1)
     return
   }
-  
-  // Field name mapping
-  const fieldNameMap: Record<string, string> = {
-    'teachingProcessManagement': '教学过程管理',
-    'teachingQualityManagement': '教学质量管理',
-    'courseAssessment': '课程考核',
-    'educationResearch': '教育教学科研工作',
-    'courseConstruction': '课程建设',
-    'teacherTeamBuilding': '教师队伍建设',
-    'researchAndExchange': '科学研究与学术交流',
-    'archiveManagement': '教学档案室管理与建设',
-    'reformProjects': '教学改革项目',
-    'teachingHonors': '年度获得教学相关荣誉表彰',
-    'teachingCompetitions': '教学比赛',
-    'innovationCompetitions': '指导创新创业比赛获奖情况',
-    'ethicsViolations': '师德师风违规',
-    'teachingAccidents': '教学事故',
-    'ideologyIssues': '意识形态问题',
-    'workloadIncomplete': '工作量未完成'
-  }
-  
-  // Add metadata to file
-  (file as any).indicator = fieldKey
-  (file as any).fieldName = fieldNameMap[fieldKey] || fieldKey
-  
-  // Update the corresponding file list
+  // 使用模块级映射，避免在回调内创建对象字面量触发 (intermediate value) is not a function
+  const fileAny = file as Record<string, unknown>
+  fileAny.indicator = fieldKey
+  fileAny.fieldName = FIELD_NAME_MAP[fieldKey] ?? fieldKey
+  const newList = [...list]
   switch (fieldKey) {
     case 'teachingProcessManagement':
-      teachingProcessFiles.value = fileList
+      teachingProcessFiles.value = newList
       break
     case 'teachingQualityManagement':
-      teachingQualityFiles.value = fileList
+      teachingQualityFiles.value = newList
       break
     case 'courseAssessment':
-      courseAssessmentFiles.value = fileList
+      courseAssessmentFiles.value = newList
       break
     case 'educationResearch':
-      educationResearchFiles.value = fileList
+      educationResearchFiles.value = newList
       break
     case 'courseConstruction':
-      courseConstructionFiles.value = fileList
+      courseConstructionFiles.value = newList
       break
     case 'teacherTeamBuilding':
-      teacherTeamBuildingFiles.value = fileList
+      teacherTeamBuildingFiles.value = newList
       break
     case 'researchAndExchange':
-      researchAndExchangeFiles.value = fileList
+      researchAndExchangeFiles.value = newList
       break
     case 'archiveManagement':
-      archiveManagementFiles.value = fileList
+      archiveManagementFiles.value = newList
       break
     case 'reformProjects':
-      reformProjectsFiles.value = fileList
+      reformProjectsFiles.value = newList
       break
     case 'teachingHonors':
-      teachingHonorsFiles.value = fileList
+      teachingHonorsFiles.value = newList
       break
     case 'teachingCompetitions':
-      teachingCompetitionsFiles.value = fileList
+      teachingCompetitionsFiles.value = newList
       break
     case 'innovationCompetitions':
-      innovationCompetitionsFiles.value = fileList
+      innovationCompetitionsFiles.value = newList
       break
     case 'ethicsViolations':
-      ethicsViolationsFiles.value = fileList
+      ethicsViolationsFiles.value = newList
       break
     case 'teachingAccidents':
-      teachingAccidentsFiles.value = fileList
+      teachingAccidentsFiles.value = newList
       break
     case 'ideologyIssues':
-      ideologyIssuesFiles.value = fileList
+      ideologyIssuesFiles.value = newList
       break
     case 'workloadIncomplete':
-      workloadIncompleteFiles.value = fileList
+      workloadIncompleteFiles.value = newList
       break
   }
   
   ElMessage.success(`已添加文件: ${file.name}`)
 }
 
-const handleInlineFileRemove = (file: UploadUserFile, fileList: UploadUserFile[], fieldKey: string) => {
-  // Update the corresponding file list
-  switch (fieldKey) {
-    case 'teachingProcessManagement':
-      teachingProcessFiles.value = fileList
-      break
-    case 'teachingQualityManagement':
-      teachingQualityFiles.value = fileList
-      break
-    case 'courseAssessment':
-      courseAssessmentFiles.value = fileList
-      break
-    case 'educationResearch':
-      educationResearchFiles.value = fileList
-      break
-    case 'courseConstruction':
-      courseConstructionFiles.value = fileList
-      break
-    case 'teacherTeamBuilding':
-      teacherTeamBuildingFiles.value = fileList
-      break
-    case 'researchAndExchange':
-      researchAndExchangeFiles.value = fileList
-      break
-    case 'archiveManagement':
-      archiveManagementFiles.value = fileList
-      break
-    case 'reformProjects':
-      reformProjectsFiles.value = fileList
-      break
-    case 'teachingHonors':
-      teachingHonorsFiles.value = fileList
-      break
-    case 'teachingCompetitions':
-      teachingCompetitionsFiles.value = fileList
-      break
-    case 'innovationCompetitions':
-      innovationCompetitionsFiles.value = fileList
-      break
-    case 'ethicsViolations':
-      ethicsViolationsFiles.value = fileList
-      break
-    case 'teachingAccidents':
-      teachingAccidentsFiles.value = fileList
-      break
-    case 'ideologyIssues':
-      ideologyIssuesFiles.value = fileList
-      break
-    case 'workloadIncomplete':
-      workloadIncompleteFiles.value = fileList
-      break
+function createInlineFileRemoveHandler(fieldKey: string) {
+  return (uploadFile: UploadUserFile, _uploadFiles?: UploadUserFile[]) => {
+    handleInlineFileRemove(uploadFile, fieldKey)
   }
-  ElMessage.info(`已移除文件: ${file.name}`)
 }
 
-const handleInlineExceed = () => {
+function handleInlineFileRemove(file: UploadUserFile, fieldKey: string) {
+  let fileListRef: Ref<UploadUserFile[]> | null = null
+
+  switch (fieldKey) {
+    case 'teachingProcessManagement':
+      fileListRef = teachingProcessFiles
+      break
+    case 'teachingQualityManagement':
+      fileListRef = teachingQualityFiles
+      break
+    case 'courseAssessment':
+      fileListRef = courseAssessmentFiles
+      break
+    case 'educationResearch':
+      fileListRef = educationResearchFiles
+      break
+    case 'courseConstruction':
+      fileListRef = courseConstructionFiles
+      break
+    case 'teacherTeamBuilding':
+      fileListRef = teacherTeamBuildingFiles
+      break
+    case 'researchAndExchange':
+      fileListRef = researchAndExchangeFiles
+      break
+    case 'archiveManagement':
+      fileListRef = archiveManagementFiles
+      break
+    case 'reformProjects':
+      fileListRef = reformProjectsFiles
+      break
+    case 'teachingHonors':
+      fileListRef = teachingHonorsFiles
+      break
+    case 'teachingCompetitions':
+      fileListRef = teachingCompetitionsFiles
+      break
+    case 'innovationCompetitions':
+      fileListRef = innovationCompetitionsFiles
+      break
+    case 'ethicsViolations':
+      fileListRef = ethicsViolationsFiles
+      break
+    case 'teachingAccidents':
+      fileListRef = teachingAccidentsFiles
+      break
+    case 'ideologyIssues':
+      fileListRef = ideologyIssuesFiles
+      break
+    case 'workloadIncomplete':
+      fileListRef = workloadIncompleteFiles
+      break
+  }
+
+  if (fileListRef) {
+    const index = fileListRef.value.findIndex(f => f.uid === file.uid)
+    if (index > -1) {
+      fileListRef.value.splice(index, 1)
+      ElMessage.info(`已移除文件: ${file.name}`)
+    }
+  }
+}
+
+function handleInlineExceed() {
   ElMessage.warning('最多只能上传5个文件')
 }
 
-// Upload attachments to backend
+// 单文件上传（供并行批处理调用）
+const CONCURRENT_UPLOADS = 6
+async function uploadOneFile (
+  file: any,
+  evaluationId: string,
+  baseURL: string,
+  token: string | null
+): Promise<boolean> {
+  const indicator = (file as any).indicator
+  if (!indicator) {
+    console.warn('File missing indicator:', file.name)
+    return false
+  }
+  const formData = new FormData()
+  formData.append('evaluation_id', evaluationId)
+  formData.append('indicator', indicator)
+  formData.append('files', file.raw as File)
+  const response = await fetch(`${baseURL}/teaching-office/attachments`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData
+  })
+  if (response.ok) return true
+  const errBody = await response.json().catch(() => ({}))
+  const msg = errBody?.detail || response.statusText || '上传失败'
+  console.error('Upload failed for file:', file.name, msg)
+  ElMessage.error(`附件「${file.name}」上传失败: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`)
+  return false
+}
+
+// Upload attachments to backend（分批并行上传，缩短总耗时）
 const uploadAttachments = async (evaluationId: string): Promise<boolean> => {
-  // 合并所有内联上传的附件
   const allAttachments = [
     ...teachingProcessFiles.value,
     ...teachingQualityFiles.value,
@@ -1973,63 +2084,27 @@ const uploadAttachments = async (evaluationId: string): Promise<boolean> => {
     ...ideologyIssuesFiles.value,
     ...workloadIncompleteFiles.value
   ]
-  
-  if (allAttachments.length === 0) {
-    return true // No files to upload
-  }
+  if (allAttachments.length === 0) return true
+
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+  const token = localStorage.getItem('token')
+  let successCount = 0
+  let failCount = 0
 
   try {
-    let successCount = 0
-    let failCount = 0
-
-    // Upload each file
-    for (const file of allAttachments) {
-      try {
-        const indicator = (file as any).indicator
-        if (!indicator) {
-          console.warn('File missing indicator:', file.name)
-          failCount++
-          continue
-        }
-
-        // Create FormData
-        const formData = new FormData()
-        formData.append('evaluation_id', evaluationId)
-        formData.append('indicator', indicator)
-        formData.append('files', file.raw as File)
-
-        // Get token
-        const token = localStorage.getItem('token')
-
-        // Upload file
-        const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-        const response = await fetch(`${baseURL}/teaching-office/attachments`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        })
-
-        if (response.ok) {
-          successCount++
-        } else {
-          console.error('Upload failed for file:', file.name)
-          failCount++
-        }
-      } catch (error) {
-        console.error('Error uploading file:', file.name, error)
-        failCount++
-      }
+    for (let i = 0; i < allAttachments.length; i += CONCURRENT_UPLOADS) {
+      const batch = allAttachments.slice(i, i + CONCURRENT_UPLOADS)
+      const results = await Promise.all(
+        batch.map((file: any) => uploadOneFile(file, evaluationId, baseURL, token))
+      )
+      results.forEach(ok => (ok ? successCount++ : failCount++))
     }
-
     if (failCount > 0) {
       ElMessage.warning(`${successCount} 个文件上传成功，${failCount} 个文件上传失败`)
       return false
-    } else {
-      ElMessage.success(`${successCount} 个附件上传成功`)
-      return true
     }
+    ElMessage.success(`${successCount} 个附件上传成功`)
+    return true
   } catch (error) {
     console.error('Upload attachments error:', error)
     ElMessage.error('附件上传失败')

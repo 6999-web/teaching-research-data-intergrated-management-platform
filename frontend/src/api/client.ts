@@ -95,6 +95,11 @@ export const scoringApi = {
   // Submit to evaluation office (for evaluation team)
   submitToOffice: (evaluationId: string) => {
     return apiClient.post(`/scoring/${evaluationId}/submit-to-office`)
+  },
+
+  // 评分记录审计（支持按评审人筛选，用于“我的评分记录”）
+  getScoringAudit: (params?: { teaching_office_id?: string; reviewer_id?: string; start_date?: string; end_date?: string }) => {
+    return apiClient.get('/scoring/audit', { params })
   }
 }
 
@@ -120,6 +125,11 @@ export const reviewApi = {
     return apiClient.post('/review/sync-to-president-office', {
       evaluation_ids: evaluationIds
     })
+  },
+
+  // Get sync tasks list (for sync history)
+  getSyncTasks: () => {
+    return apiClient.get('/review/sync-tasks')
   },
   
   // Approve results

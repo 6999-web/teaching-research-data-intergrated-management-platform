@@ -1,3 +1,14 @@
+import logging
+import sys
+
+# 优先设置标准输出/错误为 UTF-8，避免 Windows GBK 下日志/print 触发 UnicodeEncodeError
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -6,8 +17,13 @@ from app.core.logging_middleware import OperationLoggingMiddleware
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.db.base import SessionLocal
-import logging
 
+# 配置 root logger 使用 UTF-8（若 handler 支持）
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(

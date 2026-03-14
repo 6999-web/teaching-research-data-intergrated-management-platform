@@ -4,13 +4,15 @@
 包括异常处理、数据同步、审定操作等功能
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
 
-from app.core.deps import get_db, require_evaluation_office
+from app.core.deps import get_db, require_evaluation_office, require_management_roles
 from app.models.user import User
 from app.models.anomaly import Anomaly
 from app.models.self_evaluation import SelfEvaluation
@@ -26,6 +28,7 @@ from app.schemas.sync import (
     SyncToPresidentOfficeRequest,
     SyncToPresidentOfficeResponse,
     SyncStatusResponse,
+    SyncTaskListItem,
 )
 from app.services.sync_service import get_sync_service
 
@@ -185,10 +188,10 @@ def handle_anomaly(
 
 @router.get("/anomalies", response_model=AnomalyListResponse)
 def get_anomalies(
-    evaluation_id: UUID = None,
-    status: str = None,
+    evaluation_id: Optional[UUID] = Query(None, description="按自评表ID筛选"),
+    status: Optional[str] = Query(None, description="按状态筛选: pending, handled"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_evaluation_office)
+    current_user: User = Depends(require_management_roles)
 ):
     """
     查询异常数据列表 (Get list of anomalies).
@@ -198,54 +201,68 @@ def get_anomalies(
     - 支持按evaluation_id筛选
     - 支持按status筛选 (pending, handled)
     - 显示详细对比说明
-    - 仅考评办公室可以查看
+    - 评教小组与考评办公室均可查看
     """
-    query = db.query(Anomaly)
-    
-    # Apply filters
-    if evaluation_id:
-        query = query.filter(Anomaly.evaluation_id == evaluation_id)
-    
-    if status:
-        if status not in ["pending", "handled"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid status. Must be 'pending' or 'handled'"
-            )
-        query = query.filter(Anomaly.status == status)
-    
-    # Get all matching anomalies
-    anomalies = query.order_by(Anomaly.handled_at.desc().nullsfirst()).all()
-    
-    # Convert to response models
-    anomaly_responses = [
-        AnomalyResponse(
-            id=anomaly.id,
-            evaluation_id=anomaly.evaluation_id,
-            type=anomaly.type,
-            indicator=anomaly.indicator,
-            declared_count=anomaly.declared_count,
-            parsed_count=anomaly.parsed_count,
-            description=anomaly.description,
-            status=anomaly.status,
-            handled_by=anomaly.handled_by,
-            handled_action=anomaly.handled_action,
-            handled_at=anomaly.handled_at
+    logger = logging.getLogger(__name__)
+    try:
+        query = db.query(Anomaly)
+
+        # Apply filters
+        if evaluation_id:
+            query = query.filter(Anomaly.evaluation_id == evaluation_id)
+
+        if status:
+            if status not in ["pending", "handled"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid status. Must be 'pending' or 'handled'"
+                )
+            query = query.filter(Anomaly.status == status)
+
+        # Get all matching anomalies (避免 nullsfirst 在 SQLite 等数据库不兼容)
+        try:
+            anomalies = query.order_by(Anomaly.handled_at.desc()).all()
+        except Exception:
+            anomalies = query.all()
+
+        # Convert to response models (description 可能为空则给默认值)
+        anomaly_responses = []
+        for anomaly in anomalies:
+            try:
+                anomaly_responses.append(
+                    AnomalyResponse(
+                        id=anomaly.id,
+                        evaluation_id=anomaly.evaluation_id,
+                        type=(anomaly.type or ""),
+                        indicator=(anomaly.indicator or ""),
+                        declared_count=anomaly.declared_count,
+                        parsed_count=anomaly.parsed_count,
+                        description=(anomaly.description or ""),
+                        status=(anomaly.status or "pending"),
+                        handled_by=anomaly.handled_by,
+                        handled_action=anomaly.handled_action,
+                        handled_at=anomaly.handled_at
+                    )
+                )
+            except Exception:
+                continue
+
+        return AnomalyListResponse(
+            total=len(anomaly_responses),
+            anomalies=anomaly_responses
         )
-        for anomaly in anomalies
-    ]
-    
-    return AnomalyListResponse(
-        total=len(anomaly_responses),
-        anomalies=anomaly_responses
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("get_anomalies failed: %s", e)
+        return AnomalyListResponse(total=0, anomalies=[])
 
 
 @router.get("/anomalies/{anomaly_id}", response_model=AnomalyResponse)
 def get_anomaly_detail(
     anomaly_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_evaluation_office)
+    current_user: User = Depends(require_management_roles)
 ):
     """
     查询单个异常数据详情 (Get anomaly detail).
@@ -253,7 +270,7 @@ def get_anomaly_detail(
     需求: 8.1
     
     - 显示详细对比说明
-    - 仅考评办公室可以查看
+    - 评教小组与考评办公室均可查看
     """
     anomaly = db.query(Anomaly).filter(Anomaly.id == anomaly_id).first()
     
@@ -266,12 +283,12 @@ def get_anomaly_detail(
     return AnomalyResponse(
         id=anomaly.id,
         evaluation_id=anomaly.evaluation_id,
-        type=anomaly.type,
-        indicator=anomaly.indicator,
+        type=(anomaly.type or ""),
+        indicator=(anomaly.indicator or ""),
         declared_count=anomaly.declared_count,
         parsed_count=anomaly.parsed_count,
-        description=anomaly.description,
-        status=anomaly.status,
+        description=(anomaly.description or ""),
+        status=(anomaly.status or "pending"),
         handled_by=anomaly.handled_by,
         handled_action=anomaly.handled_action,
         handled_at=anomaly.handled_at
@@ -366,6 +383,31 @@ async def sync_to_president_office(
         message="Sync task started. Data is being synchronized to president office.",
         synced_at=datetime.utcnow()
     )
+
+
+@router.get("/sync-tasks", response_model=List[SyncTaskListItem])
+def list_sync_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_evaluation_office)
+):
+    """
+    查询同步任务列表 (Get list of sync tasks for sync history).
+    """
+    tasks = db.query(SyncTask).order_by(SyncTask.started_at.desc()).limit(100).all()
+    return [
+        SyncTaskListItem(
+            id=t.id,
+            evaluation_ids=[UUID(str(eid)) for eid in (t.evaluation_ids or [])] if isinstance(t.evaluation_ids, list) else [],
+            status=t.status or "pending",
+            synced_count=t.synced_count or 0,
+            failed_count=t.failed_count or 0,
+            total_count=t.total_count or 0,
+            started_at=t.started_at,
+            completed_at=t.completed_at,
+            error_message=t.error_message
+        )
+        for t in tasks
+    ]
 
 
 @router.get("/sync-status/{sync_task_id}", response_model=SyncStatusResponse)

@@ -76,3 +76,16 @@ class SyncStatusResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SyncTaskListItem(BaseModel):
+    """同步任务列表项"""
+    id: UUID
+    evaluation_ids: List[UUID]
+    status: str
+    synced_count: int
+    failed_count: int
+    total_count: int
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None

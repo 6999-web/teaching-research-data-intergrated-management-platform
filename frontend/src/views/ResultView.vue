@@ -1,11 +1,13 @@
 <template>
   <div class="result-view-page">
     <div class="page-header">
-      <h1>考评结果查看</h1>
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item :to="{ path: '/' }">
-          首页
-        </el-breadcrumb-item>
+      <div class="header-row">
+        <h1>考评结果查看</h1>
+        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+      </div>
+      <el-breadcrumb class="management-breadcrumb" separator="/">
+        <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
+        <el-breadcrumb-item>管理端</el-breadcrumb-item>
         <el-breadcrumb-item>考评结果</el-breadcrumb-item>
       </el-breadcrumb>
     </div>
@@ -333,6 +335,29 @@ const formatDate = (dateStr?: string): string => {
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.page-header .header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-header .header-row h1 {
+  margin: 0;
+  font-size: 24px;
+  color: #303133;
+}
+
+.back-home-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.back-home-link:hover {
+  text-decoration: underline;
 }
 
 .page-header h1 {

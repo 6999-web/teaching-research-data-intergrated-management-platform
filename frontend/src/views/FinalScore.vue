@@ -13,6 +13,7 @@
       <el-card
         v-if="!selectedEvaluationId"
         class="selection-card"
+        v-loading="evaluationsLoading"
       >
         <template #header>
           <h2>选择待确定最终得分的教研室</h2>
@@ -274,10 +275,9 @@ import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { Loading } from '@element-plus/icons-vue'
 import FinalScoreForm from '@/components/FinalScoreForm.vue'
-import { scoringApi } from '@/api/client'
+import { scoringApi, managementResultApi } from '@/api/client'
 import type { AllScoresResponse, IndicatorScore } from '@/types/scoring'
 
-// Mock data - In real implementation, this would come from API
 interface Evaluation {
   id: string
   teachingOfficeName: string
@@ -294,6 +294,7 @@ const selectedEvaluation = ref<Evaluation | null>(null)
 const detailsDialogVisible = ref(false)
 const detailsLoading = ref(false)
 const detailsData = ref<AllScoresResponse | null>(null)
+const evaluationsLoading = ref(false)
 
 // Computed: Sorted manual scores (evaluation_team first)
 const sortedManualScores = computed(() => {
@@ -315,35 +316,33 @@ onMounted(async () => {
   await loadEvaluations()
 })
 
-// Load evaluations
+// Load evaluations from API（仅显示已手动评分或已确定最终得分的记录，用于确定/查看最终得分）
 const loadEvaluations = async () => {
-  // Mock data - Replace with actual API call
-  evaluations.value = [
-    {
-      id: '1',
-      teachingOfficeName: '计算机科学教研室',
-      evaluationYear: 2024,
-      status: 'manually_scored',
-      manualScoresCount: 3,
-      submittedAt: '2024-01-15T10:30:00'
-    },
-    {
-      id: '2',
-      teachingOfficeName: '数学教研室',
-      evaluationYear: 2024,
-      status: 'manually_scored',
-      manualScoresCount: 2,
-      submittedAt: '2024-01-16T14:20:00'
-    },
-    {
-      id: '3',
-      teachingOfficeName: '物理教研室',
-      evaluationYear: 2024,
-      status: 'finalized',
-      manualScoresCount: 3,
-      submittedAt: '2024-01-17T09:15:00'
-    }
-  ]
+  evaluationsLoading.value = true
+  try {
+    const response = await managementResultApi.getAllResults({
+      status: undefined
+    })
+    const list = Array.isArray(response.data) ? response.data : []
+    evaluations.value = list
+      .filter((row: any) =>
+        ['manually_scored', 'ready_for_final', 'finalized', 'published'].includes(row.status)
+      )
+      .map((row: any) => ({
+        id: String(row.id),
+        teachingOfficeName: row.teaching_office_name || '',
+        evaluationYear: row.evaluation_year ?? 0,
+        status: row.status || 'manually_scored',
+        manualScoresCount: row.manual_reviewer_count ?? 0,
+        submittedAt: row.submitted_at
+      }))
+  } catch (error: any) {
+    console.error('Failed to load evaluations:', error)
+    ElMessage.error(error.response?.data?.detail || '加载待确定最终得分列表失败')
+    evaluations.value = []
+  } finally {
+    evaluationsLoading.value = false
+  }
 }
 
 // Handle select evaluation

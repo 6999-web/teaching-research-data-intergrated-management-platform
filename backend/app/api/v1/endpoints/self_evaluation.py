@@ -9,6 +9,11 @@ from app.models.user import User
 from app.models.self_evaluation import SelfEvaluation
 from app.models.attachment import Attachment
 from app.models.operation_log import OperationLog
+from app.models.teaching_office import TeachingOffice
+from app.models.ai_score import AIScore
+from app.models.manual_score import ManualScore
+from app.models.final_score import FinalScore
+from app.models.insight_summary import InsightSummary
 from app.schemas.self_evaluation import (
     SelfEvaluationCreate,
     SelfEvaluationUpdate,
@@ -86,6 +91,110 @@ def get_self_evaluation(
         )
     
     return evaluation
+
+
+@router.get("/result/{evaluation_id}")
+def get_teaching_office_result(
+    evaluation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teaching_office),
+):
+    """
+    教研室端查看已公示/已分发的考评结果（让教研室看到自己的成绩）.
+    仅当考评状态为 published 或 distributed 且属于当前用户所在教研室时可查看。
+    """
+    evaluation = (
+        db.query(SelfEvaluation)
+        .filter(SelfEvaluation.id == evaluation_id)
+        .first()
+    )
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="自评表不存在",
+        )
+    if not current_user.teaching_office_id or str(evaluation.teaching_office_id) != str(current_user.teaching_office_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只能查看本教研室的考评结果",
+        )
+    if evaluation.status not in ("published", "distributed"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该考评尚未公示或分发，暂无法查看结果",
+        )
+
+    office = db.query(TeachingOffice).filter(TeachingOffice.id == evaluation.teaching_office_id).first()
+    teaching_office_name = office.name if office else ""
+
+    ai_score = db.query(AIScore).filter(AIScore.evaluation_id == evaluation_id).first()
+    ai_score_detail = None
+    if ai_score:
+        ai_score_detail = {
+            "id": str(ai_score.id),
+            "evaluation_id": str(ai_score.evaluation_id),
+            "total_score": float(ai_score.total_score),
+            "indicator_scores": ai_score.indicator_scores or [],
+            "parsed_reform_projects": ai_score.parsed_reform_projects or 0,
+            "parsed_honorary_awards": ai_score.parsed_honorary_awards or 0,
+            "scored_at": ai_score.scored_at.isoformat() if ai_score.scored_at else None,
+        }
+
+    manual_scores_raw = (
+        db.query(ManualScore)
+        .filter(ManualScore.evaluation_id == evaluation_id)
+        .order_by(ManualScore.submitted_at.desc())
+        .all()
+    )
+    manual_scores_detail = []
+    for score in manual_scores_raw:
+        scores_list = score.scores if isinstance(score.scores, list) else []
+        manual_scores_detail.append({
+            "id": str(score.id),
+            "evaluation_id": str(score.evaluation_id),
+            "reviewer_id": str(score.reviewer_id),
+            "reviewer_name": score.reviewer_name,
+            "reviewer_role": score.reviewer_role,
+            "weight": float(score.weight),
+            "scores": scores_list,
+            "submitted_at": score.submitted_at.isoformat() if score.submitted_at else None,
+        })
+
+    final = db.query(FinalScore).filter(FinalScore.evaluation_id == evaluation_id).first()
+    final_score_detail = None
+    if final:
+        final_score_detail = {
+            "id": str(final.id),
+            "evaluation_id": str(final.evaluation_id),
+            "final_score": float(final.final_score),
+            "summary": final.summary,
+            "determined_by": str(final.determined_by),
+            "determined_at": final.determined_at.isoformat() if final.determined_at else None,
+        }
+
+    insight = db.query(InsightSummary).filter(InsightSummary.evaluation_id == evaluation_id).first()
+    insight_summary = None
+    if insight:
+        insight_summary = {
+            "id": str(insight.id),
+            "evaluation_id": str(insight.evaluation_id),
+            "summary": insight.summary,
+            "generated_at": insight.generated_at.isoformat() if insight.generated_at else None,
+        }
+
+    return {
+        "evaluation_id": str(evaluation.id),
+        "teaching_office_id": str(evaluation.teaching_office_id),
+        "teaching_office_name": teaching_office_name,
+        "evaluation_year": int(evaluation.evaluation_year) if evaluation.evaluation_year is not None else None,
+        "status": evaluation.status or "",
+        "ai_score": ai_score_detail,
+        "manual_scores": manual_scores_detail,
+        "final_score": final_score_detail,
+        "insight_summary": insight_summary,
+        "published_at": None,
+        "distributed_at": None,
+    }
 
 
 @router.put("/self-evaluation/{evaluation_id}", response_model=SelfEvaluationResponse)

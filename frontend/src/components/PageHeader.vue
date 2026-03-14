@@ -13,8 +13,8 @@
       <div class="header-content">
         <h1 class="page-title">{{ title }}</h1>
         <p v-if="subtitle" class="page-subtitle">{{ subtitle }}</p>
-        <el-breadcrumb separator="/" v-if="breadcrumbs.length > 0" class="breadcrumb">
-          <el-breadcrumb-item :to="{ path: '/' }">
+        <el-breadcrumb separator="/" v-if="breadcrumbs.length > 0" :class="['breadcrumb', homePath === '/management-home' ? 'management-breadcrumb' : '']">
+          <el-breadcrumb-item :to="{ path: homePath }">
             首页
           </el-breadcrumb-item>
           <el-breadcrumb-item 
@@ -34,7 +34,8 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { HomeFilled } from '@element-plus/icons-vue'
 
 interface Breadcrumb {
@@ -56,9 +57,20 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const router = useRouter()
+const route = useRoute()
+
+// 管理端/评教小组端页面内的「首页」回到评教小组端首页
+const homePath = computed(() => {
+  const p = route.path
+  if (p.startsWith('/management') || p.startsWith('/manual-scoring') || p.startsWith('/final-score') ||
+      p.startsWith('/anomaly') || p.startsWith('/scoring-') || p.startsWith('/my-scoring') ||
+      p.startsWith('/data-sync') || p.startsWith('/publication') || p.startsWith('/attachment-management') ||
+      p.startsWith('/all-scoring')) return '/management-home'
+  return '/'
+})
 
 const goToHome = () => {
-  router.push('/')
+  router.push(homePath.value)
 }
 </script>
 
