@@ -30,7 +30,12 @@
           <el-table-column prop="evaluation_year" label="年度" width="90" />
           <el-table-column prop="status" label="状态" width="120">
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+              <el-tag 
+                :type="getStatusTagType(row.status)"
+                :class="getStatusClass(row.status)"
+              >
+                {{ getStatusLabel(row.status) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="submitted_at" label="提交时间" width="180">
@@ -57,7 +62,12 @@
           <el-table-column prop="evaluation_year" label="年度" width="90" />
           <el-table-column prop="status" label="状态" width="120">
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+              <el-tag 
+                :type="getStatusTagType(row.status)"
+                :class="getStatusClass(row.status)"
+              >
+                {{ getStatusLabel(row.status) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="submitted_at" label="提交时间" width="180">
@@ -117,9 +127,21 @@ function getStatusTagType (status: string): string {
   return map[label] || 'info'
 }
 
-function formatTime (v: string | null) {
+function getStatusClass(status: string): string {
+  return getStatusLabel(status) === '评分前' ? 'status-yellow' : ''
+}
+
+function formatTime (v: string | number | Date | null) {
   if (!v) return '-'
-  return new Date(v).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return String(v) || '-'
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  const seconds = String(d.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 async function loadData () {
@@ -182,4 +204,17 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibilityC
 .section-title .warning-icon { color: #e6a23c; }
 .section-title.success .el-icon { color: #67c23a; }
 .section-desc { margin: 0 0 12px 0; font-size: 13px; color: #909399; }
+
+/* Custom yellow status tag */
+.status-yellow {
+  background-color: #fef0cd !important;
+  border-color: #f7d794 !important;
+  color: #d68910 !important;
+}
+
+.status-yellow.el-tag {
+  background-color: #fef0cd !important;
+  border-color: #f7d794 !important;
+  color: #d68910 !important;
+}
 </style>

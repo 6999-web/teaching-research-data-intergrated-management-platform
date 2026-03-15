@@ -66,396 +66,129 @@
         <!-- 根据菜单显示不同内容 -->
         <div v-if="shouldShowForm" class="form-container">
           <!-- 填写自评表 -->
+          <div v-if="activeMenu === 0 && !authStore.teachingOfficeId" class="no-office-warning">
+            <el-result
+              icon="warning"
+              title="账号未关联教研室"
+              sub-title="您的账号尚未关联教研室，请联系系统管理员配置教研室信息后再提交自评表。"
+            />
+          </div>
           <NewSelfEvaluationForm
-            v-if="activeMenu === 0"
-            :teaching-office-id="authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111'"
+            v-else-if="activeMenu === 0 && authStore.teachingOfficeId"
+            :teaching-office-id="authStore.teachingOfficeId"
             :evaluation-year="new Date().getFullYear()"
             @submit="handleSubmit"
           />
           
           <!-- 结果查看 -->
           <div v-if="activeMenu === 1" class="result-view">
-            <el-card class="results-list-card">
+            <el-card class="results-list-card" v-loading="resultsLoading">
               <template #header>
-                <h3>历年考评结果</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <h3>历年考评结果</h3>
+                  <el-button type="default" size="small" @click="loadPublishedResults">刷新</el-button>
+                </div>
               </template>
 
-              <!-- 考评结果列表 -->
-              <div class="evaluation-results-list">
-                <!-- 2026年考评结果 -->
-                <el-card class="result-item" shadow="hover">
+              <!-- 已发布结果列表 -->
+              <div v-if="publishedResults.length > 0" class="evaluation-results-list">
+                <el-card
+                  v-for="result in publishedResults"
+                  :key="result.evaluation_id"
+                  class="result-item"
+                  shadow="hover"
+                >
                   <div class="result-header">
                     <div class="result-title-section">
-                      <h4 class="result-year">2026年考评结果</h4>
-                      <el-tag v-if="!evaluationPublished" type="warning">考评未完成</el-tag>
-                      <el-tag v-else type="success">已公示</el-tag>
+                      <h4 class="result-year">{{ result.evaluation_year }}年考评结果</h4>
+                      <el-tag type="success">已公示</el-tag>
                     </div>
-                    <el-button 
-                      v-if="evaluationPublished" 
-                      type="primary" 
-                      link
-                      @click="viewResultDetail(2026)"
-                    >
+                    <el-button type="primary" link @click="viewResultDetail(result)">
                       查看详情
                       <el-icon><ArrowRight /></el-icon>
                     </el-button>
                   </div>
+                  <div class="result-summary">
+                    <el-descriptions :column="2" border size="small">
+                      <el-descriptions-item label="最终得分">
+                        <span class="final-score">{{ result.final_score?.final_score?.toFixed(1) ?? '-' }} 分</span>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="评审人数">
+                        {{ result.manual_scores?.length ?? 0 }} 人
+                      </el-descriptions-item>
+                      <el-descriptions-item label="教研室">
+                        {{ result.teaching_office_name }}
+                      </el-descriptions-item>
+                    </el-descriptions>
+                  </div>
+                </el-card>
+              </div>
 
-                  <!-- 未完成状态 -->
-                  <div v-if="!evaluationPublished" class="result-pending">
+              <!-- 无结果时的提示 -->
+              <div v-else class="no-results">
+                <el-card class="result-item" shadow="hover">
+                  <div class="result-header">
+                    <div class="result-title-section">
+                      <h4 class="result-year">{{ new Date().getFullYear() }}年考评结果</h4>
+                      <el-tag type="warning">考评未完成</el-tag>
+                    </div>
+                  </div>
+                  <div class="result-pending">
                     <el-alert
                       title="考评尚未完成，无法查看"
                       type="info"
                       :closable="false"
                       show-icon
                     >
-                      <p>当前考评工作尚未完成，请等待校长办公会公示后查看结果</p>
+                      <p>当前考评工作尚未完成，请等待考评小组办公室发起公示后查看结果</p>
                       <p style="margin-top: 10px;">
-                        <el-icon><Clock /></el-icon>
                         预计公示时间：{{ estimatedPublishDate }}
                       </p>
                     </el-alert>
                   </div>
-
-                  <!-- 已完成状态 -->
-                  <div v-else class="result-summary">
-                    <el-descriptions :column="2" border size="small">
-                      <el-descriptions-item label="常规教学工作">
-                        <span class="score-value">80</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="特色与亮点">
-                        <span class="score-value">0</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="负面清单扣分">
-                        <span class="score-value negative">-0</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="最终得分">
-                        <span class="final-score">0</span> 分
-                      </el-descriptions-item>
-                    </el-descriptions>
-                  </div>
-                </el-card>
-
-                <!-- 2025年考评结果（示例） -->
-                <el-card class="result-item" shadow="hover">
-                  <div class="result-header">
-                    <div class="result-title-section">
-                      <h4 class="result-year">2025年考评结果</h4>
-                      <el-tag type="info">历史记录</el-tag>
-                    </div>
-                    <el-button type="primary" link @click="viewResultDetail(2025)">
-                      查看详情
-                      <el-icon><ArrowRight /></el-icon>
-                    </el-button>
-                  </div>
-
-                  <div class="result-summary">
-                    <el-descriptions :column="2" border size="small">
-                      <el-descriptions-item label="常规教学工作">
-                        <span class="score-value">85</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="特色与亮点">
-                        <span class="score-value">10</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="负面清单扣分">
-                        <span class="score-value negative">-0</span> 分
-                      </el-descriptions-item>
-                      <el-descriptions-item label="最终得分">
-                        <span class="final-score">95</span> 分
-                      </el-descriptions-item>
-                    </el-descriptions>
-                  </div>
-                </el-card>
-              </div>
-            </el-card>
-          </div>
-          
-          <!-- 下学期改进措施 -->
-          <div v-if="activeMenu === 2" class="improvement-form">
-            <el-card class="improvements-list-card">
-              <template #header>
-                <h3>历年改进措施</h3>
-              </template>
-
-              <!-- 改进措施列表 -->
-              <div class="improvement-plans-list">
-                <!-- 2026年改进措施 -->
-                <el-card class="improvement-item" shadow="hover">
-                  <div class="improvement-header">
-                    <div class="improvement-title-section">
-                      <h4 class="improvement-year">2026年下学期改进措施</h4>
-                      <el-tag v-if="!evaluationCompleted" type="warning">考评未完成</el-tag>
-                      <el-tag v-else-if="improvementSubmitted" type="success">已提交</el-tag>
-                      <el-tag v-else type="info">待填写</el-tag>
-                    </div>
-                    <el-button 
-                      v-if="evaluationCompleted && !improvementSubmitted" 
-                      type="primary"
-                      @click="showImprovementForm = true"
-                    >
-                      填写改进措施
-                      <el-icon><Edit /></el-icon>
-                    </el-button>
-                    <el-button 
-                      v-else-if="improvementSubmitted" 
-                      type="primary" 
-                      link
-                      @click="viewImprovementDetail(2026)"
-                    >
-                      查看详情
-                      <el-icon><ArrowRight /></el-icon>
-                    </el-button>
-                  </div>
-
-                  <!-- 未完成状态 -->
-                  <div v-if="!evaluationCompleted" class="improvement-pending">
-                    <el-alert
-                      title="考评尚未完成，无法填写"
-                      type="info"
-                      :closable="false"
-                      show-icon
-                    >
-                      <p>请等待考评完成后再填写下学期改进措施</p>
-                      <p style="margin-top: 10px;">
-                        <el-icon><Clock /></el-icon>
-                        预计可填写时间：{{ estimatedImprovementDate }}
-                      </p>
-                    </el-alert>
-                  </div>
-
-                  <!-- 已提交状态 -->
-                  <div v-else-if="improvementSubmitted" class="improvement-summary">
-                    <el-descriptions :column="1" border size="small">
-                      <el-descriptions-item label="提交时间">
-                        2026-07-15 14:30:00
-                      </el-descriptions-item>
-                      <el-descriptions-item label="改进措施数量">
-                        {{ improvementPlans.length }} 项
-                      </el-descriptions-item>
-                      <el-descriptions-item label="状态">
-                        <el-tag type="success">已提交到考评小组</el-tag>
-                      </el-descriptions-item>
-                    </el-descriptions>
-                  </div>
-
-                  <!-- 待填写状态 -->
-                  <div v-else class="improvement-todo">
-                    <el-empty 
-                      description="尚未填写改进措施，点击上方按钮开始填写"
-                      :image-size="100"
-                    />
-                  </div>
-                </el-card>
-
-                <!-- 2025年改进措施（示例） -->
-                <el-card class="improvement-item" shadow="hover">
-                  <div class="improvement-header">
-                    <div class="improvement-title-section">
-                      <h4 class="improvement-year">2025年下学期改进措施</h4>
-                      <el-tag type="info">历史记录</el-tag>
-                    </div>
-                    <el-button type="primary" link @click="viewImprovementDetail(2025)">
-                      查看详情
-                      <el-icon><ArrowRight /></el-icon>
-                    </el-button>
-                  </div>
-
-                  <div class="improvement-summary">
-                    <el-descriptions :column="1" border size="small">
-                      <el-descriptions-item label="提交时间">
-                        2025-07-10 10:20:00
-                      </el-descriptions-item>
-                      <el-descriptions-item label="改进措施数量">
-                        3 项
-                      </el-descriptions-item>
-                      <el-descriptions-item label="状态">
-                        <el-tag type="success">已完成</el-tag>
-                      </el-descriptions-item>
-                    </el-descriptions>
-                  </div>
                 </el-card>
               </div>
             </el-card>
 
-            <!-- 改进措施填写对话框 -->
+            <!-- 结果详情弹窗 -->
             <el-dialog
-              v-model="showImprovementForm"
-              title="填写2026年下学期改进措施"
-              width="80%"
-              :close-on-click-modal="false"
+              v-model="resultDetailVisible"
+              :title="`${selectedResult?.evaluation_year ?? ''}年考评结果详情`"
+              width="700px"
             >
-              <el-card class="improvement-card">
-                <template #header>
-                  <div class="card-header">
-                    <h3>改进措施表单</h3>
-                    <el-button 
-                      type="primary" 
-                      @click="addImprovementPlan"
-                      :disabled="improvementSubmitted"
-                    >
-                      <el-icon><Plus /></el-icon>
-                      添加改进措施
-                    </el-button>
-                  </div>
-                </template>
+              <div v-if="selectedResult">
+                <el-descriptions :column="2" border style="margin-bottom:20px">
+                  <el-descriptions-item label="教研室">{{ selectedResult.teaching_office_name }}</el-descriptions-item>
+                  <el-descriptions-item label="考评年度">{{ selectedResult.evaluation_year }}</el-descriptions-item>
+                  <el-descriptions-item label="最终得分">
+                    <span class="final-score-big">{{ selectedResult.final_score?.final_score?.toFixed(1) ?? '-' }} 分</span>
+                  </el-descriptions-item>
+                </el-descriptions>
 
-                <!-- 改进措施列表 -->
-                <div v-if="improvementPlans.length > 0" class="plans-list">
-                  <el-card 
-                    v-for="(plan, index) in improvementPlans" 
-                    :key="index"
-                    class="plan-item"
-                    shadow="hover"
-                  >
-                    <template #header>
-                      <div class="plan-header">
-                        <span class="plan-title">改进措施 {{ index + 1 }}</span>
-                        <el-button 
-                          type="danger" 
-                          size="small" 
-                          link
-                          :disabled="improvementSubmitted"
-                          @click="removeImprovementPlan(index)"
-                        >
-                          <el-icon><Delete /></el-icon>
-                          删除
-                        </el-button>
-                      </div>
+                <h4 style="margin-bottom:12px">评审人打分记录</h4>
+                <el-table :data="selectedResult.manual_scores || []" border size="small">
+                  <el-table-column prop="reviewer_name" label="评审人" width="140" />
+                  <el-table-column prop="reviewer_role" label="角色" width="120">
+                    <template #default="{ row }">
+                      <el-tag size="small">{{ row.reviewer_role }}</el-tag>
                     </template>
+                  </el-table-column>
+                  <el-table-column label="提交时间">
+                    <template #default="{ row }">
+                      {{ row.submitted_at ? new Date(row.submitted_at).toLocaleString('zh-CN') : '-' }}
+                    </template>
+                  </el-table-column>
+                </el-table>
 
-                    <el-form :model="plan" label-width="120px" label-position="left">
-                      <el-form-item label="考核指标" required>
-                        <el-select 
-                          v-model="plan.indicator" 
-                          placeholder="请选择考核指标"
-                          style="width: 100%"
-                          :disabled="improvementSubmitted"
-                        >
-                          <el-option label="教学过程管理" value="教学过程管理" />
-                          <el-option label="教学质量管理" value="教学质量管理" />
-                          <el-option label="课程考核" value="课程考核" />
-                          <el-option label="教育教学科研工作" value="教育教学科研工作" />
-                          <el-option label="课程建设" value="课程建设" />
-                          <el-option label="教师队伍建设" value="教师队伍建设" />
-                          <el-option label="科学研究与学术交流" value="科学研究与学术交流" />
-                          <el-option label="教学档案室管理与建设" value="教学档案室管理与建设" />
-                        </el-select>
-                      </el-form-item>
-
-                      <el-form-item label="薄弱项分析" required>
-                        <el-input
-                          v-model="plan.weakness"
-                          type="textarea"
-                          :rows="3"
-                          placeholder="请分析本学期在该指标上存在的问题和不足"
-                          maxlength="500"
-                          show-word-limit
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-
-                      <el-form-item label="改进目标" required>
-                        <el-input
-                          v-model="plan.target"
-                          type="textarea"
-                          :rows="2"
-                          placeholder="请描述下学期要达到的具体目标"
-                          maxlength="300"
-                          show-word-limit
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-
-                      <el-form-item label="具体措施" required>
-                        <el-input
-                          v-model="plan.measures"
-                          type="textarea"
-                          :rows="4"
-                          placeholder="请详细说明为达成目标将采取的具体措施和行动计划"
-                          maxlength="800"
-                          show-word-limit
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-
-                      <el-form-item label="预期效果" required>
-                        <el-input
-                          v-model="plan.effect"
-                          type="textarea"
-                          :rows="2"
-                          placeholder="请描述实施这些措施后预期达到的效果"
-                          maxlength="300"
-                          show-word-limit
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-
-                      <el-form-item label="责任人" required>
-                        <el-input
-                          v-model="plan.charger"
-                          placeholder="请输入负责人姓名"
-                          style="width: 200px"
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-
-                      <el-form-item label="完成时限" required>
-                        <el-date-picker
-                          v-model="plan.deadline"
-                          type="date"
-                          placeholder="选择完成日期"
-                          format="YYYY-MM-DD"
-                          value-format="YYYY-MM-DD"
-                          style="width: 200px"
-                          :disabled="improvementSubmitted"
-                        />
-                      </el-form-item>
-                    </el-form>
+                <div v-if="selectedResult.final_score?.summary" style="margin-top:16px">
+                  <h4>感悟总结</h4>
+                  <el-card shadow="never" style="background:#f9f9f9;margin-top:8px">
+                    <p>{{ selectedResult.final_score.summary }}</p>
                   </el-card>
                 </div>
-
-                <!-- 空状态 -->
-                <el-empty 
-                  v-else 
-                  description="暂无改进措施，点击上方按钮添加"
-                  :image-size="120"
-                />
-
-                <!-- 提交按钮 -->
-                <div v-if="improvementPlans.length > 0" class="form-actions">
-                  <el-button 
-                    type="primary" 
-                    size="large"
-                    :loading="submittingPlans"
-                    :disabled="improvementSubmitted"
-                    @click="submitImprovementPlans"
-                  >
-                    {{ improvementSubmitted ? '已提交到考评小组' : '提交改进措施' }}
-                  </el-button>
-                  <el-button 
-                    size="large" 
-                    :disabled="improvementSubmitted"
-                    @click="resetImprovementPlans"
-                  >
-                    重置
-                  </el-button>
-                </div>
-
-                <!-- 已提交提示 -->
-                <el-alert
-                  v-if="improvementSubmitted"
-                  title="改进措施已提交"
-                  type="success"
-                  :closable="false"
-                  show-icon
-                  style="margin-top: 20px;"
-                >
-                  您的改进措施已成功提交到考评小组端，考评小组可以查看您的改进计划和完成情况。
-                </el-alert>
-              </el-card>
-
+              </div>
               <template #footer>
-                <el-button @click="showImprovementForm = false">关闭</el-button>
+                <el-button @click="resultDetailVisible = false">关闭</el-button>
               </template>
             </el-dialog>
           </div>
@@ -497,33 +230,30 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import NewSelfEvaluationForm from '@/components/NewSelfEvaluationForm.vue'
-import { selfEvaluationApi } from '@/api/client'
+import { selfEvaluationApi, resultApi } from '@/api/client'
 import { 
   User,
   EditPen,
-  Upload,
   ArrowRight,
-  CircleCheck,
-  FolderOpened,
   SwitchButton,
-  View,
-  Clock,
-  Plus,
-  Delete
+  View
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // 在组件挂载时加载认证信息
-onMounted(() => {
+onMounted(async () => {
   authStore.loadFromStorage()
   
   // 检查是否已登录
   if (!authStore.isLoggedIn) {
     ElMessage.warning('请先登录')
     router.push('/login')
+    return
   }
+  // 加载已发布结果
+  await loadPublishedResults()
 })
 
 const activeMenu = ref(0)
@@ -532,53 +262,44 @@ const activeTab = ref(0)
 // 保存当前的evaluation_id，用于附件上传
 const currentEvaluationId = ref<string>('')
 
-// 考评状态
-const evaluationPublished = ref(false) // 是否已公示
+// 考评状态（保留兼容性）
 const estimatedPublishDate = ref('2026-07-15') // 预计公示时间
 
-// 改进措施状态
-const evaluationCompleted = ref(false) // 考评是否完成（可以填写改进措施）
-const estimatedImprovementDate = ref('2026-07-20') // 预计可填写改进措施时间
-const improvementSubmitted = ref(false) // 改进措施是否已提交
-const showImprovementForm = ref(false) // 是否显示改进措施填写对话框
+// 已发布结果
+const publishedResults = ref<any[]>([])
+const resultsLoading = ref(false)
+const resultDetailVisible = ref(false)
+const selectedResult = ref<any>(null)
 
-// 改进措施数据结构
-interface ImprovementPlan {
-  indicator: string
-  weakness: string
-  target: string
-  measures: string
-  effect: string
-  charger: string
-  deadline: string
+const loadPublishedResults = async () => {
+  if (!authStore.teachingOfficeId) return
+  resultsLoading.value = true
+  try {
+    const res = await resultApi.getPublishedResults(authStore.teachingOfficeId)
+    publishedResults.value = Array.isArray(res.data) ? res.data : []
+  } catch (e: any) {
+    console.warn('加载考评结果失败:', e.message)
+    publishedResults.value = []
+  } finally {
+    resultsLoading.value = false
+  }
 }
-
-// 改进措施表单数据
-const improvementPlans = ref<ImprovementPlan[]>([])
-const submittingPlans = ref(false)
 
 // 查看结果详情
-const viewResultDetail = (year: number) => {
-  ElMessage.info(`查看${year}年考评结果详情`)
-  // TODO: 实现详情页面
+const viewResultDetail = (result: any) => {
+  selectedResult.value = result
+  resultDetailVisible.value = true
 }
 
-// 查看改进措施详情
-const viewImprovementDetail = (year: number) => {
-  ElMessage.info(`查看${year}年改进措施详情`)
-  // TODO: 实现详情页面
-}
-
-// 判断是否显示表单（第一个、第二个和第三个菜单）
+// 判断是否显示表单（第一个、第二个菜单）
 const shouldShowForm = computed(() => {
-  return activeMenu.value === 0 || activeMenu.value === 1 || activeMenu.value === 2
+  return activeMenu.value === 0 || activeMenu.value === 1
 })
 
 // 菜单项（只有教研室）
 const menuItems = ref([
   { name: '填写自评表', icon: markRaw(EditPen) },
-  { name: '结果查看', icon: markRaw(View) },
-  { name: '下学期改进措施', icon: markRaw(CircleCheck) }
+  { name: '结果查看', icon: markRaw(View) }
 ])
 
 // 标签页配置（只有教研室）
@@ -588,17 +309,13 @@ const tabsConfig = [
   ],
   [
     { name: '评分结果', icon: markRaw(View), description: '查看自评表评分结果' }
-  ],
-  [
-    { name: '下学期改进措施', icon: markRaw(CircleCheck), description: '查看下学期所有老师的改进措施' }
   ]
 ]
 
 // 功能配置（只有教研室）
 const functionsConfig = [
   [], // 第一个菜单显示自评表表单
-  [], // 第二个菜单显示附件管理表单
-  []  // 第三个菜单显示改进措施表格
+  []  // 第二个菜单显示附件管理表单
 ]
 
 const currentTabs = computed(() => {
@@ -615,8 +332,7 @@ const selectMenu = async (index: number) => {
 }
 
 const goToHome = () => {
-  activeMenu.value = 0
-  activeTab.value = 0
+  router.push('/')
 }
 
 const navigateTo = (route: string) => {
@@ -634,7 +350,7 @@ const handleLogout = () => {
     type: 'warning'
   }).then(() => {
     authStore.logout()
-    router.push('/login')
+    router.push('/')
   })
 }
 
@@ -642,6 +358,12 @@ const handleLogout = () => {
 const handleSubmit = async (submitData: any) => {
   let loadingMessage: any = null
   
+  // 检查 teachingOfficeId 是否存在
+  if (!authStore.teachingOfficeId) {
+    ElMessage.error('您的账号未关联教研室，无法提交自评表。请联系管理员。')
+    return
+  }
+
   try {
     // 显示加载提示
     loadingMessage = ElMessage({
@@ -656,7 +378,7 @@ const handleSubmit = async (submitData: any) => {
     
     // Step 1: Save self-evaluation
     const saveResponse = await selfEvaluationApi.save({
-      teaching_office_id: authStore.teachingOfficeId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+      teaching_office_id: authStore.teachingOfficeId,
       evaluation_year: new Date().getFullYear(),
       content: formData
     })
@@ -732,136 +454,18 @@ const handleSubmit = async (submitData: any) => {
   }
 }
 
-// 获取状态类型
-const getStatusType = (status: string) => {
-  const typeMap: Record<string, any> = {
-    '待执行': 'info',
-    '执行中': 'warning',
-    '已完成': 'success',
-    '已驳回': 'danger'
-  }
-  return typeMap[status] || 'info'
-}
-
-// 添加改进措施
-const addImprovementPlan = () => {
-  improvementPlans.value.push({
-    indicator: '',
-    weakness: '',
-    target: '',
-    measures: '',
-    effect: '',
-    charger: authStore.userName || '',
-    deadline: ''
-  })
-}
-
-// 删除改进措施
-const removeImprovementPlan = (index: number) => {
-  ElMessageBox.confirm('确定要删除这条改进措施吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
-    improvementPlans.value.splice(index, 1)
-    ElMessage.success('删除成功')
-  }).catch(() => {
-    // 取消删除
-  })
-}
-
-// 重置改进措施
-const resetImprovementPlans = () => {
-  ElMessageBox.confirm('确定要重置所有改进措施吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
-    improvementPlans.value = []
-    ElMessage.success('重置成功')
-  }).catch(() => {
-    // 取消重置
-  })
-}
-
-// 提交改进措施
-const submitImprovementPlans = async () => {
-  // 验证表单
-  for (let i = 0; i < improvementPlans.value.length; i++) {
-    const plan = improvementPlans.value[i]
-    if (!plan.indicator) {
-      ElMessage.warning(`请选择第 ${i + 1} 条改进措施的考核指标`)
-      return
-    }
-    if (!plan.weakness) {
-      ElMessage.warning(`请填写第 ${i + 1} 条改进措施的薄弱项分析`)
-      return
-    }
-    if (!plan.target) {
-      ElMessage.warning(`请填写第 ${i + 1} 条改进措施的改进目标`)
-      return
-    }
-    if (!plan.measures) {
-      ElMessage.warning(`请填写第 ${i + 1} 条改进措施的具体措施`)
-      return
-    }
-    if (!plan.effect) {
-      ElMessage.warning(`请填写第 ${i + 1} 条改进措施的预期效果`)
-      return
-    }
-    if (!plan.charger) {
-      ElMessage.warning(`请填写第 ${i + 1} 条改进措施的责任人`)
-      return
-    }
-    if (!plan.deadline) {
-      ElMessage.warning(`请选择第 ${i + 1} 条改进措施的完成时限`)
-      return
-    }
-  }
-
-  // 确认提交
-  try {
-    await ElMessageBox.confirm(
-      '提交后改进措施将发送到考评小组端，考评小组可以查看您的改进计划和完成情况。确定要提交吗？',
-      '确认提交',
-      {
-        confirmButtonText: '确定提交',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-  } catch {
-    return // 用户取消
-  }
-
-  submittingPlans.value = true
-  
-  try {
-    // TODO: 调用API提交改进措施到考评小组端
-    // await improvementApi.submitToEvaluationTeam({
-    //   teaching_office_id: authStore.teachingOfficeId,
-    //   evaluation_year: new Date().getFullYear(),
-    //   plans: improvementPlans.value
-    // })
-    
-    // 模拟提交
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // 标记为已提交
-    improvementSubmitted.value = true
-    
-    ElMessage.success('改进措施已成功提交到考评小组端！')
-    
-  } catch (error: any) {
-    console.error('Failed to submit improvement plans:', error)
-    ElMessage.error('提交失败，请重试')
-  } finally {
-    submittingPlans.value = false
-  }
-}
 </script>
 
 <style scoped>
+/* 未关联教研室的警告提示 */
+.no-office-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 2rem;
+}
+
 /* 使用与 Home.vue 相同的样式 */
 .platform-layout {
   display: flex;

@@ -257,6 +257,17 @@ def submit_to_evaluation_office(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"success": False, "message": msg}
         )
+        
+    # Check if all evaluation team members have scored (at least 2)
+    manual_scores_count = db.query(ManualScore).filter(
+        ManualScore.evaluation_id == evaluation_id
+    ).count()
+    
+    if manual_scores_count < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"success": False, "message": "需要全部两名评教小组成员完成评分后，才能提交到考评办公室。"}
+        )
     evaluation.status = "ready_for_final"
     evaluation.updated_at = datetime.utcnow()
     log_operation(

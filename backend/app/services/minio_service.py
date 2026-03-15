@@ -1,4 +1,5 @@
 from minio import Minio
+from urllib.parse import quote
 from minio.error import S3Error
 from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration
 from fastapi import UploadFile
@@ -14,9 +15,16 @@ class MinIOService:
         self._use_local_storage = False  # 标记是否使用本地存储
     
     def _initialize(self):
-        """Lazy initialization of MinIO client"""
+        """Lazy initialization of MinIO client with timeout check"""
         if not self._initialized:
+            import socket
             try:
+                # 预先检查端口，避免 Minio 客户端内部重试导致的长等待
+                host, port_str = settings.MINIO_ENDPOINT.split(":")
+                port = int(port_str)
+                with socket.create_connection((host, port), timeout=1.0):
+                    pass
+                
                 self.client = Minio(
                     settings.MINIO_ENDPOINT,
                     access_key=settings.MINIO_ACCESS_KEY,
@@ -29,7 +37,7 @@ class MinIOService:
                 self._use_local_storage = False
                 safe_print("[MinIO] 服务连接成功")
             except Exception as e:
-                safe_print("[MinIO] 服务不可用，切换到本地文件存储:", e)
+                safe_print(f"[MinIO] 服务连接检测失败 (接口: {settings.MINIO_ENDPOINT})，切换到本地文件存储: {e}")
                 self._use_local_storage = True
                 self._initialized = True
                 # Don't raise exception, use local storage as fallback
@@ -138,7 +146,7 @@ class MinIOService:
                 file_size,
                 content_type=content_type,
                 metadata={
-                    "original-filename": original_filename,
+                    "original-filename": quote(original_filename),
                     "archived": "true",
                     "retention": "permanent",
                 },

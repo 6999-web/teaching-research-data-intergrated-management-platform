@@ -330,8 +330,7 @@ const fourRoleFunctions = ref([
   [
     [
       { name: '全校概览', description: '查看全校考评进度和数据', icon: Monitor, route: '/president-office-dashboard' },
-      { name: '实时数据', description: '实时监控各教研室状态', icon: DataAnalysis, route: '/president-office-dashboard' },
-      { name: 'AI评分监控', description: '监控AI评分执行情况', icon: TrendCharts, route: '#' }
+      { name: '实时数据', description: '实时监控各教研室状态', icon: DataAnalysis, route: '/president-office-dashboard' }
     ],
     [
       { name: '手动评分', description: '考评小组和办公室进行专业评分', icon: Checked, route: '/manual-scoring' },

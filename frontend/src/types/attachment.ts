@@ -42,7 +42,7 @@ export interface UploadProgress {
 }
 
 // 考核指标类型
-export type IndicatorType = 'teaching_reform_projects' | 'honorary_awards' | 'course_construction' | 'teaching_quality' | 'student_guidance' | 'scientific_research' | 'team_building';
+export type IndicatorType = 'teaching_reform_projects' | 'honorary_awards' | 'course_construction' | 'teaching_quality' | 'student_guidance' | 'scientific_research' | 'team_building' | 'evaluation_team_file';
 
 // 考核指标配置
 export interface IndicatorConfig {
@@ -50,7 +50,7 @@ export interface IndicatorConfig {
   label: string;
   description: string;
   fileTypes: string[]; // 支持的文件类型
-  category: 'certificate' | 'project'; // 证书类或项目类
+  category: 'certificate' | 'project' | 'other'; // 证书类或项目类或其他
 }
 
 // 预定义的考核指标
@@ -103,5 +103,12 @@ export const INDICATORS: IndicatorConfig[] = [
     description: '团队建设相关材料',
     fileTypes: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
     category: 'project'
+  },
+  {
+    key: 'evaluation_team_file',
+    label: '考评小组考核文件',
+    description: '考评小组出具的最终考评相关文档（如签名表、红头文件等）',
+    fileTypes: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+    category: 'other'
   }
 ];

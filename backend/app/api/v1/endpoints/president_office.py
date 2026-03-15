@@ -4,7 +4,7 @@
 包括数据接收、实时监控、结果审定等功能
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
@@ -19,8 +19,80 @@ from app.models.operation_log import OperationLog
 from app.models.approval import Approval
 from app.models.self_evaluation import SelfEvaluation
 from app.models.user import User
+from app.models.teaching_office import TeachingOffice
 
 router = APIRouter()
+
+@router.get("/dashboard", status_code=status.HTTP_200_OK)
+def get_dashboard_data(
+    year: Optional[int] = Query(None, description="考核年度"),
+    indicator: Optional[str] = Query(None, description="考核指标"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取校长办公会端数据看板所需真实数据 (Public).
+    """
+    query = (
+        db.query(SelfEvaluation)
+        .join(TeachingOffice, SelfEvaluation.teaching_office_id == TeachingOffice.id)
+        .filter(SelfEvaluation.status.in_(["ai_scored", "manually_scored", "ready_for_final", "finalized", "approved", "published", "distributed"]))
+    )
+    if year:
+        query = query.filter(SelfEvaluation.evaluation_year == year)
+    
+    evaluations = query.all()
+    
+    scores = []
+    for ev in evaluations:
+        office = ev.teaching_office
+        
+        from app.models.ai_score import AIScore
+        from app.models.final_score import FinalScore
+        from app.models.manual_score import ManualScore
+        
+        ai_score = db.query(AIScore).filter(AIScore.evaluation_id == ev.id).first()
+        ai_score_val = float(ai_score.total_score) if ai_score else None
+        
+        final = db.query(FinalScore).filter(FinalScore.evaluation_id == ev.id).first()
+        final_score_val = float(final.final_score) if final else None
+        
+        # 简单组装所需的 reviewer data
+        manuals = db.query(ManualScore).filter(ManualScore.evaluation_id == ev.id).all()
+        manual_scores_list = []
+        for m in manuals:
+            manual_scores_list.append({
+                "reviewer_id": str(m.reviewer_id),
+                "reviewer_name": "Reviewer",
+                "reviewer_role": "evaluation_team",
+                "total_score": float(_manual_score_total(m.scores)) if m.scores else 0.0
+            })
+            
+        scores.append({
+            "teaching_office_id": str(office.id),
+            "teaching_office_name": office.name,
+            "evaluation_year": ev.evaluation_year,
+            "status": ev.status,
+            "ai_score": ai_score_val,
+            "final_score": final_score_val,
+            "manual_scores": manual_scores_list
+        })
+        
+    return {
+        "teaching_office_scores": scores,
+        "historical_scores": [],
+        "indicator_comparisons": []
+    }
+
+def _manual_score_total(scores_json) -> float:
+    if not scores_json or not isinstance(scores_json, list):
+        return 0.0
+    total = 0.0
+    for item in scores_json:
+        try:
+            total += float(item.get("score", 0))
+        except:
+            pass
+    return total
 
 
 @router.post("/receive-sync-data", status_code=status.HTTP_200_OK)

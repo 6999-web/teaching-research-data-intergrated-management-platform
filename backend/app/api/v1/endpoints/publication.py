@@ -5,17 +5,31 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
+import io
+try:
+    from docx import Document as DocxDocument
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
 
-from app.core.deps import get_db, require_evaluation_office
+from app.core.deps import get_db, require_evaluation_office, require_management_roles, get_current_user
 from app.models.user import User
 from app.models.publication import Publication
 from app.models.self_evaluation import SelfEvaluation
 from app.models.approval import Approval
 from app.models.operation_log import OperationLog
+from app.models.manual_score import ManualScore
+from app.models.final_score import FinalScore
+from app.models.ai_score import AIScore
+from app.models.attachment import Attachment
+from app.models.teaching_office import TeachingOffice
 from app.schemas.publication import (
     PublishRequest,
     PublishResponse,
@@ -24,8 +38,119 @@ from app.schemas.publication import (
     DistributeResponse,
 )
 from app.services.insight_service import generate_insight_for_evaluation
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _manual_score_total(scores_json) -> float:
+    """从 ManualScore.scores JSON 计算总分"""
+    if not scores_json or not isinstance(scores_json, list):
+        return 0.0
+    total = 0.0
+    for item in scores_json:
+        try:
+            if isinstance(item, dict) and "score" in item:
+                total += float(item["score"])
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+@router.get("/evaluations-for-publication")
+def get_evaluations_for_publication(
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_evaluation_office),
+):
+    """
+    获取可以发起公示的评估列表。
+    包含考评小组的评分信息和附件。
+    状态包括: finalized, manually_scored, approved, published, distributed
+    """
+    query = (
+        db.query(SelfEvaluation)
+        .join(TeachingOffice, SelfEvaluation.teaching_office_id == TeachingOffice.id)
+        .filter(
+            SelfEvaluation.status.in_([
+                "manually_scored", "ready_for_final", "finalized", "approved", "published", "distributed"
+            ])
+        )
+    )
+    if year:
+        query = query.filter(SelfEvaluation.evaluation_year == year)
+    evaluations = query.order_by(SelfEvaluation.submitted_at.desc()).all()
+
+    result = []
+    for ev in evaluations:
+        office = ev.teaching_office
+        office_name = office.name if office else ""
+
+        # 手动评分信息
+        manual_scores = (
+            db.query(ManualScore)
+            .filter(ManualScore.evaluation_id == ev.id)
+            .order_by(ManualScore.submitted_at.desc())
+            .all()
+        )
+        manual_score_list = []
+        for ms in manual_scores:
+            scores_list = ms.scores if isinstance(ms.scores, list) else []
+            total = _manual_score_total(scores_list)
+            manual_score_list.append({
+                "reviewer_name": ms.reviewer_name,
+                "reviewer_role": ms.reviewer_role,
+                "total": total,
+                "submitted_at": ms.submitted_at.isoformat() if ms.submitted_at else None,
+            })
+
+        # AI评分
+        ai_score = db.query(AIScore).filter(AIScore.evaluation_id == ev.id).first()
+        ai_score_val = float(ai_score.total_score) if ai_score else None
+
+        # 最终得分
+        final = db.query(FinalScore).filter(FinalScore.evaluation_id == ev.id).first()
+        final_score_val = float(final.final_score) if final else None
+
+        # 附件（考评小组端上传的）
+        attachments = (
+            db.query(Attachment)
+            .filter(Attachment.evaluation_id == ev.id)
+            .all()
+        )
+        attachment_list = [
+            {
+                "id": str(a.id),
+                "file_name": a.file_name,
+                "indicator": a.indicator,
+                "classified_by": a.classified_by,
+                "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+            }
+            for a in attachments
+        ]
+
+        # 判断是否已公示（是否在 publication 中）
+        pub = db.query(Publication).filter(
+            Publication.evaluation_ids.contains([str(ev.id)])
+        ).first()
+
+        result.append({
+            "id": str(ev.id),
+            "teaching_office_id": str(ev.teaching_office_id),
+            "teaching_office_name": office_name,
+            "evaluation_year": ev.evaluation_year,
+            "status": ev.status,
+            "ai_score": ai_score_val,
+            "manual_scores": manual_score_list,
+            "final_score": final_score_val,
+            "attachments": attachment_list,
+            "submitted_at": ev.submitted_at.isoformat() if ev.submitted_at else None,
+            "is_published": pub is not None,
+            "is_distributed": pub.distributed_at is not None if pub else False,
+        })
+
+    return result
 
 
 @router.post("/publish", response_model=PublishResponse, status_code=status.HTTP_200_OK)
@@ -35,84 +160,55 @@ def publish(
     current_user: User = Depends(require_evaluation_office)
 ):
     """
-    发起公示 (Initiate publication).
-    
-    需求: 13.1, 13.2, 13.3, 13.4
-    
-    - 仅在校长办公会审定同意后显示"发起公示"按钮
-    - 考评办公室手动点击按钮发起公示
-    - 禁止自动发起公示
-    - 显示成功提示
-    - 仅考评办公室可以发起公示
+    发起公示并直接分发到各教研室。
+    - 同时将状态改为 distributed（教研室可以立即查看）
+    - 记录操作日志
     """
-    # Validate that all evaluations exist and are approved
+    if not request.evaluation_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请至少选择一个教研室")
+
     evaluations = []
     for eval_id in request.evaluation_ids:
-        evaluation = db.query(SelfEvaluation).filter(
-            SelfEvaluation.id == eval_id
-        ).first()
-        
+        evaluation = db.query(SelfEvaluation).filter(SelfEvaluation.id == eval_id).first()
         if not evaluation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Evaluation with id {eval_id} not found"
+                detail=f"Evaluation {eval_id} not found"
             )
-        
-        evaluations.append(evaluation)
-    
-    # Check if any of the evaluations have already been published
-    # This check must happen before status validation
-    existing_publication = db.query(Publication).filter(
-        Publication.evaluation_ids.contains([str(eval_id) for eval_id in request.evaluation_ids])
-    ).first()
-    
-    if existing_publication:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One or more evaluations have already been published."
-        )
-    
-    # Now check if evaluations are approved by president office
-    for evaluation in evaluations:
-        # Check if evaluation is approved by president office
-        # 需求 13.1: 仅在校长办公会审定同意后显示"发起公示"按钮
-        if evaluation.status != "approved":
+        if evaluation.status in ("published", "distributed"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Evaluation {evaluation.id} has not been approved by president office yet. Current status: {evaluation.status}"
+                detail=f"教研室 {evaluation.id} 的考评已经公示，不能重复公示"
             )
-    
-    # Verify that there is an approval record for these evaluations
-    # This ensures the president office has actually approved them
-    approval = db.query(Approval).filter(
-        Approval.decision == "approve"
-    ).order_by(Approval.approved_at.desc()).first()
-    
-    if not approval:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No approval record found. President office must approve before publication."
-        )
-    
-    # Create publication record
-    # 需求 13.2: 考评办公室点击"发起公示"按钮时，系统启动公示流程
-    published_at = datetime.utcnow()
+        if evaluation.status not in ("manually_scored", "ready_for_final", "finalized", "approved"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"教研室状态 '{evaluation.status}' 不满足公示条件，需要先完成评分"
+            )
+        evaluations.append(evaluation)
+
+    now = datetime.utcnow()
     publication = Publication(
         evaluation_ids=[str(eval_id) for eval_id in request.evaluation_ids],
         published_by=current_user.id,
-        published_at=published_at
+        published_at=now,
+        distributed_at=now,  # 直接分发
     )
     db.add(publication)
-    
-    # Update evaluation status to published
+
     for evaluation in evaluations:
-        evaluation.status = "published"
-    
-    # Flush to get the publication ID before creating operation log
+        evaluation.status = "distributed"
+
     db.flush()
-    
-    # Record operation log
-    # 需求 17.7: 公示时记录操作日志
+
+    # 生成感悟总结
+    for evaluation in evaluations:
+        try:
+            generate_insight_for_evaluation(db, evaluation.id)
+        except Exception as e:
+            logger.warning(f"Failed to generate insight for {evaluation.id}: {e}")
+
+    # 操作日志
     operation_log = OperationLog(
         operation_type="publish",
         operator_id=current_user.id,
@@ -122,20 +218,18 @@ def publish(
         target_type="publication",
         details={
             "evaluation_ids": [str(eid) for eid in request.evaluation_ids],
-            "evaluation_count": len(request.evaluation_ids)
+            "evaluation_count": len(request.evaluation_ids),
+            "action": "publish_and_distribute"
         }
     )
     db.add(operation_log)
-    
-    # Commit all changes
     db.commit()
     db.refresh(publication)
-    
-    # 需求 13.4: 公示启动时显示成功提示
+
     return PublishResponse(
         publication_id=publication.id,
-        published_at=published_at,
-        message="Publication initiated successfully. Results are now visible to all teaching offices."
+        published_at=now,
+        message=f"公示成功！{len(evaluations)} 个教研室的考评结果已分发，各教研室可立即查看结果。"
     )
 
 
@@ -144,15 +238,8 @@ def get_publications(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_evaluation_office)
 ):
-    """
-    查询公示记录列表 (Get list of publications).
-    
-    - 仅考评办公室可以查看
-    """
-    publications = db.query(Publication).order_by(
-        Publication.published_at.desc()
-    ).all()
-    
+    """查询公示记录列表"""
+    publications = db.query(Publication).order_by(Publication.published_at.desc()).all()
     return [
         PublicationDetail(
             id=pub.id,
@@ -171,21 +258,10 @@ def get_publication_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_evaluation_office)
 ):
-    """
-    查询单个公示记录详情 (Get publication detail).
-    
-    - 仅考评办公室可以查看
-    """
-    publication = db.query(Publication).filter(
-        Publication.id == publication_id
-    ).first()
-    
+    """查询单个公示记录详情"""
+    publication = db.query(Publication).filter(Publication.id == publication_id).first()
     if not publication:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Publication with id {publication_id} not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Publication not found")
     return PublicationDetail(
         id=publication.id,
         evaluation_ids=[UUID(eid) for eid in publication.evaluation_ids],
@@ -201,77 +277,31 @@ def distribute(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_evaluation_office)
 ):
-    """
-    自动分发结果 (Distribute results).
-    
-    需求: 14.1, 14.2
-    
-    - 公示无异议后，自动分发最终考评结果至管理端和教研室端
-    - 分发至教研室端时显示最终得分、详细评分细则、所有评审人打分记录、系统生成的感悟总结
-    - 分发至管理端时显示所有教研室最终得分和审定结果
-    - 仅考评办公室可以触发分发
-    """
-    # Validate that publication exists
-    publication = db.query(Publication).filter(
-        Publication.id == request.publication_id
-    ).first()
-    
+    """分发结果到教研室端"""
+    publication = db.query(Publication).filter(Publication.id == request.publication_id).first()
     if not publication:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Publication with id {request.publication_id} not found"
-        )
-    
-    # Check if already distributed
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Publication not found")
     if publication.distributed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Publication {request.publication_id} has already been distributed at {publication.distributed_at}"
+            detail=f"Already distributed at {publication.distributed_at}"
         )
-    
-    # Validate that all evaluations in the publication exist
+
     evaluation_ids = [UUID(eid) for eid in publication.evaluation_ids]
-    evaluations = db.query(SelfEvaluation).filter(
-        SelfEvaluation.id.in_(evaluation_ids)
-    ).all()
-    
-    if len(evaluations) != len(evaluation_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Some evaluations in the publication do not exist"
-        )
-    
-    # Verify all evaluations are published
-    for evaluation in evaluations:
-        if evaluation.status != "published":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Evaluation {evaluation.id} is not in published status. Current status: {evaluation.status}"
-            )
-    
-    # Update publication distributed_at timestamp
-    # 需求 14.1, 14.2: 自动分发最终考评结果至管理端和教研室端
+    evaluations = db.query(SelfEvaluation).filter(SelfEvaluation.id.in_(evaluation_ids)).all()
+
     distributed_at = datetime.utcnow()
     publication.distributed_at = distributed_at
-    
-    # Update evaluation status to distributed
-    # This allows the teaching office and management to view the results
+
     for evaluation in evaluations:
         evaluation.status = "distributed"
-    
-    # Generate insight summaries for all evaluations
-    # 需求 15.1: 基于综合考核指标自动生成感悟总结
-    # 需求 15.6: 禁止人工填写感悟总结
-    insight_count = 0
+
     for evaluation in evaluations:
         try:
             generate_insight_for_evaluation(db, evaluation.id)
-            insight_count += 1
         except Exception as e:
-            # Log error but don't fail the entire distribution
-            print(f"Warning: Failed to generate insight for evaluation {evaluation.id}: {str(e)}")
-    
-    # Record operation log
+            logger.warning(f"Failed to generate insight for {evaluation.id}: {e}")
+
     operation_log = OperationLog(
         operation_type="distribute",
         operator_id=current_user.id,
@@ -286,13 +316,171 @@ def distribute(
         }
     )
     db.add(operation_log)
-    
-    # Commit all changes
     db.commit()
     db.refresh(publication)
-    
+
     return DistributeResponse(
         distributed_count=len(evaluations),
         distributed_at=distributed_at,
-        message=f"Results distributed successfully to management and teaching offices. {len(evaluations)} evaluation(s) are now accessible."
+        message=f"Results distributed successfully. {len(evaluations)} evaluation(s) accessible to teaching offices."
     )
+
+
+@router.post("/sync-to-president")
+def sync_to_president(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_evaluation_office)
+):
+    """
+    将已完成评分的考评信息上传至校长办公会端查看。
+    返回所有 finalized/approved/published/distributed 状态的汇总数据。
+    """
+    evaluations = (
+        db.query(SelfEvaluation)
+        .filter(SelfEvaluation.status.in_(["finalized", "approved", "published", "distributed", "manually_scored"]))
+        .all()
+    )
+
+    summary = []
+    for ev in evaluations:
+        office = ev.teaching_office
+        final = db.query(FinalScore).filter(FinalScore.evaluation_id == ev.id).first()
+        manual_scores = db.query(ManualScore).filter(ManualScore.evaluation_id == ev.id).all()
+        manual_totals = [_manual_score_total(ms.scores) for ms in manual_scores]
+        manual_avg = sum(manual_totals) / len(manual_totals) if manual_totals else None
+
+        attachments = db.query(Attachment).filter(Attachment.evaluation_id == ev.id).all()
+
+        summary.append({
+            "id": str(ev.id),
+            "teaching_office_name": office.name if office else "",
+            "evaluation_year": ev.evaluation_year,
+            "status": ev.status,
+            "final_score": float(final.final_score) if final else None,
+            "manual_score_avg": float(manual_avg) if manual_avg is not None else None,
+            "manual_reviewer_count": len(manual_scores),
+            "attachment_count": len(attachments),
+            "submitted_at": ev.submitted_at.isoformat() if ev.submitted_at else None,
+        })
+
+    # 记录操作日志
+    if evaluations:
+        try:
+            operation_log = OperationLog(
+                operation_type="sync",
+                operator_id=current_user.id,
+                operator_name=current_user.name,
+                operator_role=current_user.role,
+                target_id=evaluations[0].id,
+                target_type="sync_to_president",
+                details={"evaluation_count": len(evaluations), "action": "sync_to_president"}
+            )
+            db.add(operation_log)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to log sync operation: {e}")
+
+    return {
+        "synced_count": len(summary),
+        "synced_at": datetime.utcnow().isoformat(),
+        "data": summary,
+        "message": f"已将 {len(summary)} 条考评信息同步至校长办公会端"
+    }
+
+
+@router.get("/generate-result-word")
+def generate_result_word(
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    生成考评结果Word文档，供校长端「同意发文」时下载。
+    """
+    # 查询已公示或已分发的考评
+    query = (
+        db.query(SelfEvaluation)
+        .join(TeachingOffice, SelfEvaluation.teaching_office_id == TeachingOffice.id)
+        .filter(SelfEvaluation.status.in_(["finalized", "approved", "published", "distributed"]))
+    )
+    if year:
+        query = query.filter(SelfEvaluation.evaluation_year == year)
+    evaluations = query.order_by(SelfEvaluation.submitted_at.desc()).all()
+
+    # 汇总数据
+    rows = []
+    target_year = year or datetime.utcnow().year
+    for ev in evaluations:
+        office = ev.teaching_office
+        final = db.query(FinalScore).filter(FinalScore.evaluation_id == ev.id).first()
+        ai = db.query(AIScore).filter(AIScore.evaluation_id == ev.id).first()
+        manual_scores = db.query(ManualScore).filter(ManualScore.evaluation_id == ev.id).all()
+        manual_totals = [_manual_score_total(ms.scores) for ms in manual_scores]
+        manual_avg = sum(manual_totals) / len(manual_totals) if manual_totals else None
+        rows.append({
+            "name": office.name if office else "",
+            "year": ev.evaluation_year,
+            "final_score": float(final.final_score) if final else None,
+            "ai_score": float(ai.total_score) if ai else None,
+            "manual_avg": float(manual_avg) if manual_avg is not None else None,
+            "status": ev.status,
+        })
+
+    if not DOCX_AVAILABLE:
+        # 若 python-docx 未安装，返回纯文本
+        lines = [f"教研室工作考评结果汇总（{target_year}年度）\n"]
+        lines.append(f"{'教研室名称':<20}{'年度':<8}{'最终得分':<12}{'AI评分':<12}{'人工均分':<12}\n")
+        lines.append("-" * 64 + "\n")
+        for r in rows:
+            fs = f"{r['final_score']:.1f}" if r['final_score'] is not None else "-"
+            ai = f"{r['ai_score']:.1f}" if r['ai_score'] is not None else "-"
+            ma = f"{r['manual_avg']:.1f}" if r['manual_avg'] is not None else "-"
+            lines.append(f"{r['name']:<20}{r['year']:<8}{fs:<12}{ai:<12}{ma:<12}\n")
+        content = "".join(lines).encode("utf-8")
+        return Response(
+            content=content,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="result_{target_year}.txt"'}
+        )
+
+    # 生成 Word 文档
+    doc = DocxDocument()
+    doc.add_heading(f"教研室工作考评结果汇总（{target_year}年度）", level=0)
+    doc.add_paragraph(f"发文时间：{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}")
+    doc.add_paragraph(f"共 {len(rows)} 个教研室")
+    doc.add_paragraph("")
+
+    # 表格
+    table = doc.add_table(rows=1, cols=5)
+    table.style = "Table Grid"
+    hdr = table.rows[0].cells
+    headers = ["教研室名称", "考评年度", "最终得分", "AI评分", "人工均分"]
+    for i, h in enumerate(headers):
+        hdr[i].text = h
+        for para in hdr[i].paragraphs:
+            for run in para.runs:
+                run.bold = True
+
+    # 排序：最终得分降序
+    rows_sorted = sorted(rows, key=lambda x: x["final_score"] or 0, reverse=True)
+    for r in rows_sorted:
+        row_cells = table.add_row().cells
+        row_cells[0].text = r["name"]
+        row_cells[1].text = str(r["year"])
+        row_cells[2].text = f"{r['final_score']:.1f}" if r["final_score"] is not None else "-"
+        row_cells[3].text = f"{r['ai_score']:.1f}" if r["ai_score"] is not None else "-"
+        row_cells[4].text = f"{r['manual_avg']:.1f}" if r["manual_avg"] is not None else "-"
+
+    doc.add_paragraph("")
+    doc.add_paragraph("备注：本文档由系统自动生成，仅供参考。")
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    filename = f"result_{target_year}.docx"
+    return Response(
+        content=buf.read(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+

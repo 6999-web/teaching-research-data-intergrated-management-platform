@@ -212,8 +212,16 @@
         <div v-if="props.currentUserRole === 'evaluation_team' && hasSubmitted" class="submit-office-section">
           <el-divider />
           <el-alert
-            v-if="!canSubmitToOffice && props.evaluationStatus"
-            title="请先完成评教小组手动评分。评分完成后系统将自动计算所有成员平均分，届时方可提交到评教小组办公室。"
+            v-if="!canSubmitToOffice && props.evaluationStatus && manualReviewerCount < 2"
+            title="请等待全部两名评教小组成员完成手动评分后，系统将自动计算平均分，届时方可由最后一名评分者提交到评教小组办公室。"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px;"
+          />
+          <el-alert
+            v-else-if="!canSubmitToOffice && props.evaluationStatus"
+            title="请先完成评教小组手动评分。"
             type="warning"
             :closable="false"
             show-icon
@@ -556,10 +564,10 @@ const weightInfo = computed(() => {
   return `您的评分权重为 ${weight}%。${props.currentUserRole === 'evaluation_team' ? '考评小组的评分权重高于考评办公室。' : ''}`
 })
 
-// 仅当「已手动评分」时允许提交：评分完成后系统计算评教小组平均分，再提交到办公室
+// 仅当「已手动评分」并且所有两名评教小组成员都评分后允许提交
 const canSubmitToOffice = computed(() => {
   const s = props.evaluationStatus || evaluationStatus.value
-  return s === 'manually_scored'
+  return s === 'manually_scored' && manualReviewerCount.value >= 2
 })
 
 // Computed: Sorted manual scores (evaluation_team first)
@@ -941,7 +949,8 @@ const getItemLabel = (itemKey: string | number): string => {
     'achievements': '成果',
     'problems': '存在问题',
     'improvements': '改进措施',
-    'plans': '工作计划'
+    'plans': '工作计划',
+    'archiveManagement': '档案管理'
   }
   
   // 如果有映射，返回中文

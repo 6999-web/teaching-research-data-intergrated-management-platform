@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import re
 import logging
+from fastapi.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ async def upload_attachments(
     indicator: str = Form(..., description="考核指标"),
     files: List[UploadFile] = File(..., description="上传的文件列表"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_teaching_office),
+    current_user: User = Depends(get_current_user),
 ):
     """
     上传附件
@@ -109,8 +110,9 @@ async def upload_attachments(
             # 构建存储路径: evaluation_id/indicator_safe/unique_filename（路径中只用安全字符）
             storage_path = f"{evaluation_id}/{indicator_safe}/{unique_filename}"
             
-            # 使用字节内容上传，不再依赖 file.seek(0)
-            upload_success = minio_service.upload_file_bytes(
+            # 使用 run_in_threadpool 防止同步方法阻塞事件循环，从而导致上传速度慢
+            upload_success = await run_in_threadpool(
+                minio_service.upload_file_bytes,
                 storage_path,
                 file_content,
                 content_type=file.content_type or "application/octet-stream",
@@ -360,12 +362,12 @@ async def download_attachment(
 async def delete_attachment(
     attachment_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_teaching_office),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    教研室端删除附件
+    删除附件
     
-    - 仅允许删除未锁定自评表下的附件
+    - 仅允许删除未锁定自评表下的附件 (如果是教研室端)。管理端可随时删除。
     - 同步删除 MinIO/本地存储中的文件
     """
     attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
@@ -382,7 +384,7 @@ async def delete_attachment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="自评表不存在"
         )
-    if evaluation.status == "locked":
+    if evaluation.status == "locked" and current_user.role in ["teaching_office", "director", "teacher"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="自评表已锁定，无法删除附件"

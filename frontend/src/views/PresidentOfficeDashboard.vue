@@ -1,6 +1,12 @@
 <template>
   <div class="president-office-dashboard">
-    <h1>校长办公会 - 实时数据监控</h1>
+    <div class="dashboard-header-container">
+      <h1>校长办公会 - 实时数据监控</h1>
+      <el-button @click="goBackToHome" type="primary" plain>
+        <el-icon><Back /></el-icon>
+        返回校长办公会主页
+      </el-button>
+    </div>
     
     <!-- Filters -->
     <el-card class="filter-card">
@@ -147,10 +153,70 @@
           <el-card>
             <div class="stat-card">
               <div class="stat-label">
-                已完成评分
+                已完成最终评分
               </div>
               <div class="stat-value">
                 {{ completedCount }}
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <!-- 评教流程进度监控 -->
+      <el-card style="margin-bottom: 20px;">
+        <template #header>
+          <div class="card-header">
+            <span>📊 评教流程进度监控</span>
+            <el-tag type="success">实时</el-tag>
+          </div>
+        </template>
+        <el-row :gutter="16">
+          <el-col :span="4" v-for="stage in evaluationStages" :key="stage.key">
+            <div style="text-align:center; padding: 12px; background: #f5f7fa; border-radius: 8px; margin-bottom: 8px;">
+              <div style="font-size:24px; font-weight:bold; color:#409eff;">{{ stage.count }}</div>
+              <div style="font-size:12px; color:#606266; margin-top:4px;">{{ stage.label }}</div>
+              <el-progress
+                :percentage="dashboardData.teaching_office_scores.length > 0 ? Math.round(stage.count / dashboardData.teaching_office_scores.length * 100) : 0"
+                :status="stage.count > 0 ? 'success' : ''"
+                :stroke-width="6"
+                style="margin-top:8px;"
+              />
+            </div>
+          </el-col>
+        </el-row>
+      </el-card>
+
+      <!-- AI监控与评分分析 (Requirement 5: 实时数据监控的平均AI监控) -->
+      <el-row :gutter="20" style="margin-bottom: 20px;">
+        <el-col :span="8">
+          <el-card shadow="never" class="ai-monitor-card">
+            <div class="monitor-content">
+              <div class="monitor-icon ai-blue"><el-icon><Monitor /></el-icon></div>
+              <div class="monitor-info">
+                <div class="monitor-label">全校AI平均评分</div>
+                <div class="monitor-value">{{ averageAIScore.toFixed(2) }} <small>分</small></div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="8">
+          <el-card shadow="never" class="ai-monitor-card">
+            <div class="monitor-content">
+              <div class="monitor-icon ai-green"><el-icon><Checked /></el-icon></div>
+              <div class="monitor-info">
+                <div class="monitor-label">AI评分覆盖率</div>
+                <div class="monitor-value">{{ aiCoverage }}%</div>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="8">
+          <el-card shadow="never" class="ai-monitor-card">
+            <div class="monitor-content">
+              <div class="monitor-icon ai-orange"><el-icon><Warning /></el-icon></div>
+              <div class="monitor-info">
+                <div class="monitor-label">异常得分预警 (AI v.s. 人工)</div>
+                <div class="monitor-value">{{ anomalyCount }} <small>项</small></div>
               </div>
             </div>
           </el-card>
@@ -273,7 +339,7 @@
           :closable="false"
           style="margin-bottom: 15px"
         >
-          请选择需要审定的教研室，然后点击"同意公示"或"驳回重新审核"按钮
+          请选择需要审定的教研室，然后点击"同意发文"或"驳回重新审核"按钮
         </el-alert>
         
         <div class="approval-actions">
@@ -295,7 +361,7 @@
               :disabled="selectedEvaluationIds.length === 0"
               @click="openApprovalDialog('approve')"
             >
-              同意公示
+              同意发文
             </el-button>
             <el-button
               type="danger"
@@ -519,18 +585,18 @@
     <!-- Approval Dialog -->
     <el-dialog
       v-model="approvalDialogVisible"
-      :title="approvalDecision === 'approve' ? '同意公示' : '驳回重新审核'"
+      :title="approvalDecision === 'approve' ? '同意发文' : '驳回重新审核'"
       width="50%"
     >
       <div v-if="approvalDecision === 'approve'">
         <el-alert
-          title="确认同意公示"
+          title="确认同意发文"
           type="success"
           :closable="false"
           style="margin-bottom: 15px"
         >
-          您即将同意以下 {{ selectedEvaluationIds.length }} 个教研室的考评结果公示。
-          同意后，管理端将可以发起公示流程。
+          您即将同意以下 {{ selectedEvaluationIds.length }} 个教研室的考评结果发文公布。
+          同意后，系统将自动生成并下载考评结果Word文档。
         </el-alert>
         
         <div class="selected-offices-list">
@@ -594,7 +660,7 @@
           :loading="approvalLoading"
           @click="submitApproval"
         >
-          确认{{ approvalDecision === 'approve' ? '同意' : '驳回' }}
+          确认{{ approvalDecision === 'approve' ? '同意发文' : '驳回' }}
         </el-button>
       </template>
     </el-dialog>
@@ -603,13 +669,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Loading, Back } from '@element-plus/icons-vue'
 import { presidentOfficeApi } from '@/api/client'
 import type { TeachingOfficeScore, DashboardData, DashboardFilters, ApprovalRequest } from '@/types/presidentOffice'
 import { EVALUATION_INDICATORS } from '@/types/scoring'
 
 // Data
+const router = useRouter()
 const loading = ref(false)
 const dashboardData = ref<DashboardData>({
   teaching_office_scores: [],
@@ -701,6 +769,37 @@ const finalizableOffices = computed(() => {
   )
 })
 
+// 评教流程进度统计
+const aiCoverage = computed(() => {
+  const total = dashboardData.value.teaching_office_scores.length
+  if (total === 0) return 0
+  const covered = dashboardData.value.teaching_office_scores.filter(s => s.ai_score != null).length
+  return Math.round((covered / total) * 100)
+})
+
+const anomalyCount = computed(() => {
+  // AI score vs average manual score difference > 20
+  return dashboardData.value.teaching_office_scores.filter(s => {
+    if (s.ai_score == null || s.manual_scores.length === 0) return false
+    const manualAvg = s.manual_scores.reduce((sum, m) => sum + m.total_score, 0) / s.manual_scores.length
+    return Math.abs(s.ai_score - manualAvg) > 20
+  }).length
+})
+
+const evaluationStages = computed(() => {
+  const scores = dashboardData.value.teaching_office_scores
+  const countByStatus = (statuses: string[]) =>
+    scores.filter(s => statuses.includes(s.status || '')).length
+  return [
+    { key: 'submitted', label: '已提交自评', count: countByStatus(['submitted', 'locked', 'ai_scored', 'manually_scored', 'ready_for_final', 'finalized', 'approved', 'published', 'distributed']) },
+    { key: 'ai_scored', label: 'AI评分完成', count: countByStatus(['ai_scored', 'manually_scored', 'ready_for_final', 'finalized', 'approved', 'published', 'distributed']) },
+    { key: 'manually_scored', label: '手动评分完成', count: countByStatus(['manually_scored', 'ready_for_final', 'finalized', 'approved', 'published', 'distributed']) },
+    { key: 'ready_for_final', label: '已提交到办公室', count: countByStatus(['ready_for_final', 'finalized', 'approved', 'published', 'distributed']) },
+    { key: 'finalized', label: '最终成绩确定', count: countByStatus(['finalized', 'approved', 'published', 'distributed']) },
+    { key: 'published', label: '已公示分发', count: countByStatus(['published', 'distributed']) },
+  ]
+})
+
 // Methods
 const loadData = async () => {
   loading.value = true
@@ -715,6 +814,15 @@ const loadData = async () => {
     ElMessage.error(error.response?.data?.detail || '加载数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+const goBackToHome = () => {
+  const mode = localStorage.getItem('viewMode')
+  if (mode === 'role') {
+    router.push('/home')
+  } else {
+    router.push('/management-home')
   }
 }
 
@@ -798,7 +906,12 @@ const submitApproval = async () => {
     
     const response = await presidentOfficeApi.approveResults(request)
     
-    ElMessage.success(response.data.message)
+    ElMessage.success(response.data.message || '操作成功')
+    
+    // 如果是同意发文，触发Word文档下载
+    if (approvalDecision.value === 'approve') {
+      await downloadResultWord()
+    }
     
     // Close dialog and reset
     approvalDialogVisible.value = false
@@ -814,6 +927,41 @@ const submitApproval = async () => {
   }
 }
 
+// 下载考评结果Word文档
+const downloadResultWord = async () => {
+  try {
+    const year = filters.value.year
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+    const token = localStorage.getItem('token')
+    const url = `${baseURL}/publication/generate-result-word${year ? '?year=' + year : ''}`
+    
+    ElMessage.info('正在生成考评结果文档，请稍候...')
+    
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    
+    if (!res.ok) {
+      throw new Error('生成文档失败')
+    }
+    
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    // 根据响应类型决定文件名
+    const contentType = res.headers.get('content-type') || ''
+    const ext = contentType.includes('word') ? 'docx' : 'txt'
+    a.download = `考评结果汇总_${year || new Date().getFullYear()}.${ext}`
+    a.click()
+    URL.revokeObjectURL(blobUrl)
+    
+    ElMessage.success('考评结果文档已生成并下载！')
+  } catch (err: any) {
+    ElMessage.warning('文档下载失败，但发文决定已记录：' + (err.message || ''))
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   loadData()
@@ -821,6 +969,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.dashboard-header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.dashboard-header-container h1 {
+  margin: 0;
+}
 .president-office-dashboard {
   padding: 20px;
 }

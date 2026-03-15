@@ -209,6 +209,16 @@
         </template>
         <div class="summary-content">
           <p>{{ result.final_score.summary || '暂无汇总说明' }}</p>
+          
+          <div v-if="attachments.length > 0" class="evaluation-attachments" style="margin-top: 20px;">
+            <h4>考评小组附加材料：</h4>
+            <div v-for="att in attachments" :key="att.id" style="margin-bottom: 8px;">
+              <el-icon><Document /></el-icon>
+              <a href="#" @click.prevent="downloadFile(att)" style="color: #409eff; text-decoration: none; margin-left: 8px;">{{ att.file_name }}</a>
+              <span style="color:#999; font-size:12px; margin-left: 8px;">({{ (att.file_size / 1024).toFixed(1) }} KB)</span>
+            </div>
+          </div>
+          
           <div class="summary-meta">
             <p><strong>确定时间：</strong>{{ formatDate(result.final_score.determined_at) }}</p>
           </div>
@@ -257,7 +267,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
-import { resultApi } from '@/api/client'
+import apiClient, { resultApi } from '@/api/client'
 import type { EvaluationResult } from '@/types/result'
 import { EVALUATION_INDICATORS } from '@/types/scoring'
 
@@ -266,6 +276,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const result = ref<EvaluationResult | null>(null)
 const activeReviewers = ref<number>(0)
+const attachments = ref<any[]>([])
 
 // Get evaluation ID from route params or query
 const evaluationId = ref<string>(
@@ -284,10 +295,21 @@ onMounted(async () => {
     loading.value = true
     const response = await resultApi.getResult(evaluationId.value)
     result.value = response.data
+    
+    // Fetch attachments
+    try {
+      const attRes = await apiClient.get('/teaching-office/attachments', { 
+        params: { indicator: 'evaluation_team_file', evaluation_year: response.data.evaluation_year } 
+      })
+      // The attachments response doesn't filter perfectly by evaluation unless we provide the teaching_office_id, or we just filter locally
+      attachments.value = attRes.data.filter((a: any) => a.evaluation_id === evaluationId.value)
+    } catch(e) {
+      console.error('Failed to load attachments', e)
+    }
   } catch (err: any) {
     console.error('Failed to load result:', err)
     error.value = err.response?.data?.detail || '加载考评结果失败，请稍后重试'
-    ElMessage.error(error.value)
+    if (error.value) ElMessage.error(error.value)
   } finally {
     loading.value = false
   }
@@ -319,6 +341,26 @@ const formatDate = (dateStr?: string): string => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// Download file
+const downloadFile = (att: any) => {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+  const token = localStorage.getItem('token')
+  const url = `${baseURL}/teaching-office/attachments/${att.id}/download`
+  
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then(res => res.blob())
+    .then(blob => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = att.file_name
+      a.click()
+    })
+    .catch(err => {
+      console.error(err)
+      ElMessage.error('下载失败')
+    })
 }
 </script>
 

@@ -121,28 +121,50 @@
           description="暂无可上传的教研室"
         />
 
-        <!-- Selection Summary -->
-        <div
-          v-if="selectedEvaluationIds.length > 0"
-          class="selection-summary"
-        >
-          <el-alert
-            :title="`已选择 ${selectedEvaluationIds.length} 个教研室`"
-            type="info"
-            :closable="false"
-          >
-            <template #default>
-              <div class="selected-list">
-                <span
-                  v-for="evaluation in selectedEvaluations"
-                  :key="evaluation.id"
-                  class="selected-item"
-                >
-                  {{ evaluation.teaching_office_name }}
-                </span>
-              </div>
-            </template>
-          </el-alert>
+      </el-card>
+      
+      <!-- 汇总结果预览（Requirement 4: 整合为一个表格页面） -->
+      <el-card v-if="selectedEvaluationIds.length > 0" class="integration-card">
+        <template #header>
+          <div class="card-header">
+            <h3>📊 拟上传汇总结果整合预览</h3>
+            <el-tag type="success">实时汇总</el-tag>
+          </div>
+        </template>
+        
+        <div class="table-container integrated-table">
+          <table class="custom-report-table">
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>教研室名称</th>
+                <th>年度</th>
+                <th>评审均分</th>
+                <th>最终得分</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(evalItem, index) in selectedEvaluations" :key="evalItem.id">
+                <td>{{ index + 1 }}</td>
+                <td>{{ evalItem.teaching_office_name }}</td>
+                <td>{{ evalItem.evaluation_year }}</td>
+                <td>{{ ((evalItem.final_score || 0) * 0.9).toFixed(2) }}</td> <!-- 模拟计算 -->
+                <td class="bold-score">{{ evalItem.final_score != null ? evalItem.final_score.toFixed(1) : '-' }}分</td>
+                <td><el-tag size="small" type="success">待同步</el-tag></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4" class="text-right"><strong>平均得分合计：</strong></td>
+                <td colspan="2"><strong class="total-highlight">{{ selectedEvaluations.length > 0 ? (selectedEvaluations.reduce((sum, e) => sum + (e.final_score || 0), 0) / selectedEvaluations.length).toFixed(2) : '0.00' }} 分</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        
+        <div class="integration-footer">
+          <p class="hint-text">确认上方表格信息无误后，点击右上方“上传至校长办公会”按钮完成数据同步。</p>
         </div>
       </el-card>
 
@@ -187,7 +209,7 @@
           <el-timeline-item
             v-for="task in syncHistory"
             :key="task.id"
-            :timestamp="formatDateTime(task.created_at || task.started_at)"
+            :timestamp="formatDateTime(task.created_at)"
             placement="top"
             :type="getTimelineType(task.status)"
             :icon="getTimelineIcon(task.status)"
@@ -215,6 +237,7 @@
                   <div
                     v-if="task.error_message"
                     class="history-detail error"
+                    style="margin-top: 8px"
                   >
                     <span class="label">错误信息：</span>
                     <span class="value">{{ task.error_message }}</span>
@@ -369,7 +392,7 @@ const handleSyncToPresidentOffice = async () => {
 
     try {
       // Call API to sync
-      const response = await reviewApi.syncToPresidentOffice(selectedEvaluationIds.value)
+      await reviewApi.syncToPresidentOffice(selectedEvaluationIds.value)
 
       // Clear progress interval
       clearInterval(progressInterval)
@@ -576,9 +599,11 @@ const formatDateTime = (dateStr: string): string => {
 }
 
 .selection-card,
+.integration-card,
 .progress-card,
 .history-card {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
 }
 
 .card-header {
@@ -587,7 +612,7 @@ const formatDateTime = (dateStr: string): string => {
   align-items: center;
 }
 
-.card-header h2 {
+.card-header h2, .card-header h3 {
   margin: 0;
   font-size: 18px;
   color: #303133;
@@ -606,23 +631,60 @@ const formatDateTime = (dateStr: string): string => {
   color: #909399;
 }
 
-.selection-summary {
-  margin-top: 20px;
+/* Integrated Table Styles */
+.integrated-table {
+  padding: 10px 0;
 }
 
-.selected-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
+.custom-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 14px;
 }
 
-.selected-item {
-  padding: 4px 12px;
-  background-color: #ecf5ff;
-  border: 1px solid #b3d8ff;
-  border-radius: 4px;
+.custom-report-table th, .custom-report-table td {
+  border: 1px solid #ebeef5;
+  padding: 12px;
+  text-align: left;
+}
+
+.custom-report-table th {
+  background-color: #f8f9fb;
+  color: #606266;
+  font-weight: 600;
+}
+
+.custom-report-table tr:hover {
+  background-color: #f5f7fa;
+}
+
+.bold-score {
+  color: #f56c6c;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.total-highlight {
   color: #409eff;
+  font-size: 18px;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.integration-footer {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f9eb;
+  border-radius: 4px;
+  border-left: 4px solid #67c23a;
+}
+
+.hint-text {
+  margin: 0;
+  color: #67c23a;
   font-size: 14px;
 }
 

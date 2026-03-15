@@ -197,6 +197,89 @@ def get_teaching_office_result(
     }
 
 
+@router.get("/published-results")
+def get_published_results(
+    teaching_office_id: Optional[str] = None,
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teaching_office),
+):
+    """
+    教研室端获取已公示/已分发的考评结果列表。
+    允许教研室查看自己的所有已公示结果。
+    """
+    # 从当前用户的 teaching_office_id 或参数获取
+    office_id_to_use = teaching_office_id or str(current_user.teaching_office_id) if current_user.teaching_office_id else None
+
+    if not office_id_to_use:
+        return []
+
+    query = (
+        db.query(SelfEvaluation)
+        .filter(
+            SelfEvaluation.teaching_office_id == UUID(office_id_to_use),
+            SelfEvaluation.status.in_(["published", "distributed"])
+        )
+        .order_by(SelfEvaluation.evaluation_year.desc())
+    )
+    if year:
+        query = query.filter(SelfEvaluation.evaluation_year == year)
+
+    evaluations = query.all()
+    results = []
+    for ev in evaluations:
+        office = db.query(TeachingOffice).filter(TeachingOffice.id == ev.teaching_office_id).first()
+        ai_score = db.query(AIScore).filter(AIScore.evaluation_id == ev.id).first()
+        manual_scores_raw = db.query(ManualScore).filter(ManualScore.evaluation_id == ev.id).all()
+        final = db.query(FinalScore).filter(FinalScore.evaluation_id == ev.id).first()
+
+        def _manual_score_total(scores_json) -> float:
+            if not scores_json or not isinstance(scores_json, list):
+                return 0.0
+            total = 0.0
+            for item in scores_json:
+                try:
+                    if isinstance(item, dict) and "score" in item:
+                        total += float(item["score"])
+                except Exception:
+                    continue
+            return total
+
+        manual_scores_detail = [
+            {
+                "reviewer_name": s.reviewer_name,
+                "reviewer_role": s.reviewer_role,
+                "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+                "total": _manual_score_total(s.scores)
+            }
+            for s in manual_scores_raw
+        ]
+
+        calculated_final = None
+        if final:
+            calculated_final = float(final.final_score)
+        elif manual_scores_raw:
+            tot = sum([_manual_score_total(s.scores) for s in manual_scores_raw])
+            calculated_final = tot / len(manual_scores_raw)
+
+        results.append({
+            "evaluation_id": str(ev.id),
+            "teaching_office_id": str(ev.teaching_office_id),
+            "teaching_office_name": office.name if office else "",
+            "evaluation_year": ev.evaluation_year,
+            "status": ev.status,
+            "ai_score": {"total_score": float(ai_score.total_score)} if ai_score else None,
+            "manual_scores": manual_scores_detail,
+            "final_score": {
+                "final_score": calculated_final,
+                "summary": final.summary if final else "综合得分",
+                "determined_at": final.determined_at.isoformat() if final and final.determined_at else None,
+            } if calculated_final is not None else None,
+        })
+
+    return results
+
+
 @router.put("/self-evaluation/{evaluation_id}", response_model=SelfEvaluationResponse)
 def update_self_evaluation(
     evaluation_id: UUID,

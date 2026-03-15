@@ -2,425 +2,507 @@
   <div class="publication-page">
     <div class="page-header">
       <div class="header-row">
-        <h1>发起公示</h1>
-        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+        <h1>🔔 发起公示</h1>
+        <a href="#" @click.prevent="goBackToHome" class="back-home-link">← 返回主页</a>
       </div>
       <el-breadcrumb class="management-breadcrumb" separator="/">
         <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>管理端</el-breadcrumb-item>
+        <el-breadcrumb-item>考评办公室</el-breadcrumb-item>
         <el-breadcrumb-item>发起公示</el-breadcrumb-item>
       </el-breadcrumb>
     </div>
 
     <div class="page-content">
-      <!-- Evaluation Selection Card -->
-      <el-card class="selection-card">
-        <template #header>
-          <div class="card-header">
-            <h2>选择待公示的教研室</h2>
+      <!-- 操作工具栏 -->
+      <el-card class="toolbar-card">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <el-tag type="info" size="large" round>
+              共 {{ evaluations.length }} 条考评记录
+            </el-tag>
+            <el-tag v-if="selectedIds.length > 0" type="warning" size="large" round>
+              已选 {{ selectedIds.length }} 条
+            </el-tag>
+          </div>
+          <div class="toolbar-right">
+            <el-button
+              type="primary"
+              :icon="Refresh"
+              @click="loadEvaluations"
+              :loading="loading"
+            >刷新</el-button>
+            <el-button
+              type="warning"
+              :icon="Upload"
+              @click="handleSyncToPresident"
+              :loading="isSyncing"
+            >
+              上传至校长办公会
+            </el-button>
             <el-button
               type="success"
-              :disabled="selectedEvaluationIds.length === 0 || isPublishing"
+              :icon="Promotion"
+              :disabled="selectedIds.length === 0 || isPublishing"
               :loading="isPublishing"
               @click="handlePublish"
             >
-              <el-icon v-if="!isPublishing">
-                <Promotion />
-              </el-icon>
-              {{ isPublishing ? '发起中...' : '发起公示' }}
+              {{ isPublishing ? '发布中...' : '确认公示并分发到教研室' }}
             </el-button>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 评估列表 -->
+      <el-card class="main-card" v-loading="loading">
+        <template #header>
+          <div class="card-header">
+            <h2>考评小组评分信息</h2>
+            <span class="card-subtitle">选择需要公示的教研室，点击"确认公示并分发到教研室"</span>
           </div>
         </template>
 
         <el-alert
-          title="提示"
           type="info"
           :closable="false"
-          style="margin-bottom: 15px"
+          style="margin-bottom: 16px"
         >
-          仅显示已通过校长办公会审定同意的教研室。选择需要公示的教研室后，点击"发起公示"按钮启动公示流程。
+          <template #title>
+            <span>📌 操作说明：</span>
+          </template>
+          <span>此页面显示考评小组已完成评分的教研室信息，包含手动评分明细和附件。勾选教研室后点击"确认公示并分发到教研室"，将把最终得分分发到各教研室，教研室可在"结果查看"中看到成绩。</span>
         </el-alert>
 
-        <!-- Evaluation Table -->
         <el-table
-          ref="evaluationTableRef"
-          v-loading="loading"
+          ref="tableRef"
           :data="evaluations"
           stripe
           style="width: 100%"
-          class="evaluation-table"
+          row-key="id"
           @selection-change="handleSelectionChange"
+          :expand-row-keys="expandedRows"
+          @expand-change="handleExpandChange"
         >
-          <el-table-column
-            type="selection"
-            width="55"
-            :selectable="isRowSelectable"
-          />
-          <el-table-column
-            prop="teaching_office_name"
-            label="教研室名称"
-            width="200"
-          />
-          <el-table-column
-            prop="evaluation_year"
-            label="考评年度"
-            width="120"
-          />
-          <el-table-column
-            prop="status"
-            label="状态"
-            width="150"
-          >
-            <template #default="scope">
-              <el-tag :type="getStatusTagType(scope.row.status)">
-                {{ getStatusLabel(scope.row.status) }}
-              </el-tag>
+          <el-table-column type="selection" width="55" :selectable="isSelectable" />
+          <el-table-column type="expand">
+            <template #default="{ row }">
+              <div class="expand-content">
+                <!-- 手动评分明细 -->
+                <div class="expand-section">
+                  <h4 class="expand-title">📊 考评小组评分明细</h4>
+                  <div v-if="row.manual_scores && row.manual_scores.length > 0">
+                    <el-table :data="row.manual_scores" size="small" border>
+                      <el-table-column label="评审人" prop="reviewer_name" width="140" />
+                      <el-table-column label="评审角色" prop="reviewer_role" width="140">
+                        <template #default="s">
+                          <el-tag size="small">{{ getRoleLabel(s.row.reviewer_role) }}</el-tag>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="总分" width="100">
+                        <template #default="s">
+                          <span class="score-highlight">{{ s.row.total?.toFixed(1) ?? '-' }} 分</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="评分时间" prop="submitted_at">
+                        <template #default="s">
+                          {{ s.row.submitted_at ? formatDateTime(s.row.submitted_at) : '-' }}
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
+                  <el-empty v-else description="暂无手动评分记录" :image-size="40" />
+                </div>
+
+                <!-- 附件列表 -->
+                <div class="expand-section" style="margin-top: 16px">
+                  <h4 class="expand-title">📎 考评小组上传附件</h4>
+                  <div v-if="row.attachments && row.attachments.length > 0">
+                    <div
+                      v-for="att in row.attachments"
+                      :key="att.id"
+                      class="attachment-item"
+                    >
+                      <el-icon><Document /></el-icon>
+                      <a
+                        href="#"
+                        @click.prevent="downloadFile(att)"
+                        class="att-link"
+                      >{{ att.file_name }}</a>
+                      <el-tag size="small" type="info" style="margin-left: 8px">
+                        {{ att.indicator || '通用' }}
+                      </el-tag>
+                      <span class="att-date">{{ att.uploaded_at ? formatDateTime(att.uploaded_at) : '' }}</span>
+                    </div>
+                  </div>
+                  <el-empty v-else description="暂无附件" :image-size="40" />
+                </div>
+              </div>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="final_score"
-            label="最终得分"
-            width="120"
-          >
-            <template #default="scope">
-              <span
-                v-if="scope.row.final_score !== undefined"
-                class="final-score"
-              >
-                {{ scope.row.final_score.toFixed(1) }}分
+
+          <el-table-column prop="teaching_office_name" label="教研室名称" min-width="140" />
+          <el-table-column prop="evaluation_year" label="考评年度" width="100" align="center" />
+          <el-table-column label="当前状态" width="140" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="AI评分" width="100" align="center">
+            <template #default="{ row }">
+              <span v-if="row.ai_score != null" class="score-text">{{ row.ai_score.toFixed(1) }}</span>
+              <span v-else class="no-data">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="人工评分(均)" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.manual_scores && row.manual_scores.length > 0" class="score-text">
+                {{ getManualAvg(row.manual_scores).toFixed(1) }}
+                <small>({{ row.manual_scores.length }}人)</small>
               </span>
-              <span
-                v-else
-                class="no-score"
-              >-</span>
+              <span v-else class="no-data">-</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="approved_at"
-            label="审定时间"
-            width="180"
-          >
-            <template #default="scope">
-              {{ scope.row.approved_at ? formatDate(scope.row.approved_at) : '-' }}
+          <el-table-column label="最终得分" width="110" align="center">
+            <template #default="{ row }">
+              <span v-if="row.final_score != null" class="final-score">
+                {{ row.final_score.toFixed(1) }} 分
+              </span>
+              <span v-else class="no-data">未确定</span>
             </template>
           </el-table-column>
-          <el-table-column
-            label="公示状态"
-            width="150"
-          >
-            <template #default="scope">
-              <el-tag
-                v-if="scope.row.status === 'published'"
-                type="success"
+          <el-table-column label="附件数" width="90" align="center">
+            <template #default="{ row }">
+              <el-badge :value="row.attachments?.length || 0" type="primary" :hidden="!row.attachments?.length">
+                <el-icon size="20"><Paperclip /></el-icon>
+              </el-badge>
+            </template>
+          </el-table-column>
+          <el-table-column label="公示状态" width="140" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_distributed" type="success">已分发到教研室</el-tag>
+              <el-tag v-else-if="row.is_published" type="warning">已公示(待分发)</el-tag>
+              <el-tag v-else-if="row.status === 'ready_for_final'" type="primary">已提交到办公室</el-tag>
+              <el-tag v-else-if="row.status === 'finalized'" type="warning">已定分(待公示)</el-tag>
+              <el-tag v-else type="info">待公示</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="90" align="center">
+            <template #default="{ row }">
+              <el-button
+                type="primary"
+                link
+                size="small"
+                @click="toggleExpand(row.id)"
               >
-                已公示
-              </el-tag>
-              <el-tag
-                v-else
-                type="info"
-              >
-                未公示
-              </el-tag>
+                查看详情
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
 
         <el-empty
           v-if="evaluations.length === 0 && !loading"
-          description="暂无可公示的教研室"
+          description="暂无可公示的考评记录，请等待考评小组完成评分"
+          :image-size="120"
         />
-
-        <!-- Selection Summary -->
-        <div
-          v-if="selectedEvaluationIds.length > 0"
-          class="selection-summary"
-        >
-          <el-alert
-            :title="`已选择 ${selectedEvaluationIds.length} 个教研室`"
-            type="info"
-            :closable="false"
-          >
-            <template #default>
-              <div class="selected-list">
-                <span
-                  v-for="evaluation in selectedEvaluations"
-                  :key="evaluation.id"
-                  class="selected-item"
-                >
-                  {{ evaluation.teaching_office_name }}
-                </span>
-              </div>
-            </template>
-          </el-alert>
-        </div>
       </el-card>
 
-      <!-- Publication History Card -->
+      <!-- 公示历史 -->
       <el-card class="history-card">
         <template #header>
           <div class="card-header">
             <h2>公示历史</h2>
-            <el-button
-              type="default"
-              size="small"
-              :icon="Refresh"
-              @click="loadPublicationHistory"
-            >
-              刷新
-            </el-button>
+            <el-button type="default" size="small" :icon="Refresh" @click="loadHistory">刷新</el-button>
           </div>
         </template>
 
-        <el-timeline v-if="publicationHistory.length > 0">
+        <el-timeline v-if="history.length > 0">
           <el-timeline-item
-            v-for="publication in publicationHistory"
-            :key="publication.id"
-            :timestamp="formatDateTime(publication.published_at)"
+            v-for="pub in history"
+            :key="pub.id"
+            :timestamp="formatDateTime(pub.published_at)"
             placement="top"
             type="success"
             :icon="Check"
           >
-            <el-card>
-              <div class="history-item">
-                <div class="history-header">
-                  <el-tag type="success">
-                    已公示
-                  </el-tag>
-                  <span class="publication-id">公示ID: {{ publication.id }}</span>
-                </div>
-                <div class="history-content">
-                  <div class="history-detail">
-                    <span class="label">公示教研室数量：</span>
-                    <span class="value">{{ publication.evaluation_ids.length }}个</span>
-                  </div>
-                  <div
-                    v-if="publication.distributed_at"
-                    class="history-detail"
-                  >
-                    <span class="label">分发时间：</span>
-                    <span class="value">{{ formatDateTime(publication.distributed_at) }}</span>
-                  </div>
-                  <div
-                    v-else
-                    class="history-detail"
-                  >
-                    <span class="label">分发状态：</span>
-                    <el-tag
-                      type="warning"
-                      size="small"
-                    >
-                      待分发
-                    </el-tag>
-                  </div>
-                </div>
+            <el-card shadow="never" class="history-item-card">
+              <div class="history-row">
+                <el-tag type="success">已公示</el-tag>
+                <span class="history-count">涉及 {{ pub.evaluation_ids?.length || 0 }} 个教研室</span>
+                <el-tag v-if="pub.distributed_at" type="success" size="small">已分发到教研室</el-tag>
+                <el-tag v-else type="warning" size="small">待分发</el-tag>
+              </div>
+              <div v-if="pub.distributed_at" class="history-detail">
+                分发时间：{{ formatDateTime(pub.distributed_at) }}
               </div>
             </el-card>
           </el-timeline-item>
         </el-timeline>
-
-        <el-empty
-          v-else
-          description="暂无公示历史"
-        />
+        <el-empty v-else description="暂无公示历史" />
       </el-card>
     </div>
+
+    <!-- 同步到校长端结果弹窗 -->
+    <el-dialog
+      v-model="syncResultVisible"
+      title="已同步至校长办公会端"
+      width="700px"
+    >
+      <div class="sync-result">
+        <el-alert type="success" :closable="false" style="margin-bottom: 16px">
+          {{ syncResult?.message }}
+        </el-alert>
+        <el-table :data="syncResult?.data || []" border size="small" max-height="400">
+          <el-table-column prop="teaching_office_name" label="教研室" width="140" />
+          <el-table-column prop="evaluation_year" label="年度" width="80" align="center" />
+          <el-table-column label="状态" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="最终得分" width="100" align="center">
+            <template #default="{ row }">
+              <span v-if="row.final_score != null" class="final-score">{{ row.final_score.toFixed(1) }}</span>
+              <span v-else class="no-data">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="人工评分均" width="110" align="center">
+            <template #default="{ row }">
+              <span v-if="row.manual_score_avg != null">{{ row.manual_score_avg.toFixed(1) }}</span>
+              <span v-else class="no-data">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="评审人数" prop="manual_reviewer_count" width="90" align="center" />
+          <el-table-column label="附件数" prop="attachment_count" width="80" align="center" />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="syncResultVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Promotion, Refresh, Check } from '@element-plus/icons-vue'
-import { publicationApi, managementResultApi } from '@/api/client'
-import type { EvaluationForPublication, PublicationDetail, PublishRequest } from '@/types/publication'
+import { Promotion, Refresh, Check, Document, Upload, Paperclip } from '@element-plus/icons-vue'
+import { publicationApi } from '@/api/client'
 
-// State
+const router = useRouter()
 const loading = ref(false)
 const isPublishing = ref(false)
-const evaluations = ref<EvaluationForPublication[]>([])
-const selectedEvaluationIds = ref<string[]>([])
-const evaluationTableRef = ref()
+const isSyncing = ref(false)
+const tableRef = ref()
 
-// Publication history
-const publicationHistory = ref<PublicationDetail[]>([])
+const evaluations = ref<any[]>([])
+const selectedIds = ref<string[]>([])
+const history = ref<any[]>([])
+const expandedRows = ref<string[]>([])
 
-// Computed: Selected evaluations
-const selectedEvaluations = computed(() => {
-  return evaluations.value.filter(e => selectedEvaluationIds.value.includes(e.id))
-})
+const syncResultVisible = ref(false)
+const syncResult = ref<any>(null)
 
-// Load evaluations on mount
+const goBackToHome = () => {
+  const mode = localStorage.getItem('viewMode')
+  if (mode === 'role') {
+    router.push('/home')
+  } else {
+    router.push('/management-home')
+  }
+}
+
 onMounted(async () => {
-  await loadEvaluations()
-  await loadPublicationHistory()
+  await Promise.all([loadEvaluations(), loadHistory()])
 })
 
-// Load evaluations（已审定同意或已公示的教研室，来自管理端结果接口）
 const loadEvaluations = async () => {
   loading.value = true
   try {
-    const response = await managementResultApi.getAllResults()
-    const list = Array.isArray(response.data) ? response.data : []
-    evaluations.value = list
-      .filter((r: any) => ['approved', 'published', 'distributed'].includes(r.approval_status || r.status))
-      .map((r: any) => ({
-        id: r.id,
-        teaching_office_name: r.teaching_office_name || '-',
-        evaluation_year: r.evaluation_year,
-        status: r.approval_status || r.status || 'approved',
-        final_score: r.final_score,
-        approved_at: r.approved_at || r.determined_at
-      }))
-  } catch (error: any) {
-    console.error('Failed to load evaluations:', error)
-    ElMessage.error('加载教研室列表失败')
+    const res = await publicationApi.getEvaluationsForPublication()
+    evaluations.value = Array.isArray(res.data) ? res.data : []
+  } catch (e: any) {
+    console.error('Failed to load evaluations:', e)
+    ElMessage.error('加载考评列表失败：' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
   }
 }
 
-// Load publication history（公示历史来自公示接口）
-const loadPublicationHistory = async () => {
+const loadHistory = async () => {
   try {
-    const response = await publicationApi.getPublications()
-    const data = response.data
-    publicationHistory.value = Array.isArray(data) ? data : []
-  } catch (error: any) {
-    console.error('Failed to load publication history:', error)
+    const res = await publicationApi.getPublications()
+    history.value = Array.isArray(res.data) ? res.data : []
+  } catch (e) {
+    console.error('Failed to load history:', e)
   }
 }
 
-// Handle selection change
-const handleSelectionChange = (selection: EvaluationForPublication[]) => {
-  selectedEvaluationIds.value = selection.map(e => e.id)
+const handleSelectionChange = (rows: any[]) => {
+  selectedIds.value = rows.map(r => r.id)
 }
 
-// Check if row is selectable
-const isRowSelectable = (row: EvaluationForPublication) => {
-  // Only approved and not published evaluations can be selected
-  // 需求 13.1: 仅在校长办公会审定同意后显示"发起公示"按钮
-  return row.status === 'approved'
+const isSelectable = (row: any) => {
+  // 允许对尚未分发且处于评分后状态的记录进行选择
+  // 状态包括：已手动评分、已提交至考评办公室(待定分)、已确定得分、已审定
+  const canPublishStatus = ['manually_scored', 'ready_for_final', 'finalized', 'approved'].includes(row.status)
+  return !row.is_distributed && canPublishStatus
 }
 
-// Handle publish
 const handlePublish = async () => {
-  if (selectedEvaluationIds.value.length === 0) {
-    ElMessage.warning('请至少选择一个教研室')
+  if (selectedIds.value.length === 0) {
+    ElMessage.warning('请先选择要公示的教研室')
     return
   }
 
+  const selectedNames = evaluations.value
+    .filter(e => selectedIds.value.includes(e.id))
+    .map(e => e.teaching_office_name)
+    .join('、')
+
   try {
     await ElMessageBox.confirm(
-      `确定要发起公示吗？选中的 ${selectedEvaluationIds.value.length} 个教研室的考评结果将向全体教研室公开。`,
-      '确认发起公示',
+      `确定要将以下 ${selectedIds.value.length} 个教研室的考评结果公示并分发到教研室端吗？\n\n${selectedNames}\n\n分发后，各教研室可在"结果查看"中看到自己的最终得分。`,
+      '确认公示',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确认公示',
         cancelButtonText: '取消',
-        type: 'warning'
+        type: 'warning',
+        dangerouslyUseHTMLString: false
       }
     )
 
-    // Start publishing
-    // 需求 13.2: 考评办公室点击"发起公示"按钮时，系统启动公示流程
     isPublishing.value = true
-
     try {
-      const request: PublishRequest = {
-        evaluation_ids: selectedEvaluationIds.value
-      }
-      
-      const response = await publicationApi.publish(request)
-
-      // 需求 13.4: 公示启动时显示成功提示
+      const res = await publicationApi.publish({ evaluation_ids: selectedIds.value })
       ElMessage.success({
-        message: response.data.message || '公示已成功发起！',
-        duration: 3000
+        message: res.data.message || '公示成功！',
+        duration: 5000
       })
-
-      // Clear selection
-      selectedEvaluationIds.value = []
-      if (evaluationTableRef.value) {
-        evaluationTableRef.value.clearSelection()
-      }
-
-      // Reload data
-      setTimeout(async () => {
-        await loadEvaluations()
-        await loadPublicationHistory()
-      }, 1000)
-
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || '发起公示失败，请稍后重试'
-
+      selectedIds.value = []
+      if (tableRef.value) tableRef.value.clearSelection()
+      await Promise.all([loadEvaluations(), loadHistory()])
+    } catch (e: any) {
       ElMessage.error({
-        message: errorMessage,
-        duration: 5000,
+        message: '公示失败：' + (e.response?.data?.detail || e.message),
+        duration: 6000,
         showClose: true
       })
     }
-
-  } catch (error) {
-    // User cancelled
-    console.log('User cancelled publication')
+  } catch {
+    // 用户取消
   } finally {
     isPublishing.value = false
   }
 }
 
-// Get status tag type
-const getStatusTagType = (status: string): string => {
-  const types: Record<string, string> = {
-    'draft': 'info',
-    'submitted': 'warning',
-    'locked': 'warning',
-    'ai_scored': 'success',
-    'manually_scored': 'primary',
-    'finalized': 'danger',
-    'approved': 'success',
-    'rejected_by_president': 'danger',
-    'published': 'success'
+const handleSyncToPresident = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要将所有已完成评分的考评信息同步到校长办公会端吗？校长可以查看各教研室的评分情况和附件。',
+      '确认同步',
+      {
+        confirmButtonText: '确认同步',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+
+    isSyncing.value = true
+    try {
+      const res = await publicationApi.syncToPresident()
+      syncResult.value = res.data
+      syncResultVisible.value = true
+      ElMessage.success('信息已成功同步至校长办公会端')
+    } catch (e: any) {
+      ElMessage.error('同步失败：' + (e.response?.data?.detail || e.message))
+    }
+  } catch {
+    // 用户取消
+  } finally {
+    isSyncing.value = false
   }
-  return types[status] || 'info'
 }
 
-// Get status label
+const toggleExpand = (id: string) => {
+  const idx = expandedRows.value.indexOf(id)
+  if (idx >= 0) {
+    expandedRows.value.splice(idx, 1)
+  } else {
+    expandedRows.value.push(id)
+  }
+}
+
+const handleExpandChange = (row: any, expanded: boolean) => {
+  if (expanded) {
+    if (!expandedRows.value.includes(row.id)) expandedRows.value.push(row.id)
+  } else {
+    expandedRows.value = expandedRows.value.filter(id => id !== row.id)
+  }
+}
+
+const getManualAvg = (scores: any[]) => {
+  if (!scores || scores.length === 0) return 0
+  const total = scores.reduce((sum, s) => sum + (s.total || 0), 0)
+  return total / scores.length
+}
+
+const downloadFile = (att: any) => {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+  const token = localStorage.getItem('token')
+  const url = `${baseURL}/teaching-office/attachments/${att.id}/download`
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then(res => res.blob())
+    .then(blob => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = att.file_name
+      a.click()
+    })
+    .catch(() => ElMessage.error('下载失败'))
+}
+
+const getStatusType = (status: string): string => {
+  const map: Record<string, string> = {
+    manually_scored: 'primary',
+    finalized: 'success',
+    approved: 'success',
+    published: 'warning',
+    distributed: 'success',
+    ai_scored: 'info',
+    submitted: 'info'
+  }
+  return map[status] || 'info'
+}
+
 const getStatusLabel = (status: string): string => {
-  const labels: Record<string, string> = {
-    'draft': '草稿',
-    'submitted': '已提交',
-    'locked': '已锁定',
-    'ai_scored': 'AI已评分',
-    'manually_scored': '已手动评分',
-    'finalized': '已确定最终得分',
-    'approved': '已审定同意',
-    'rejected_by_president': '已驳回',
-    'published': '已公示'
+  const map: Record<string, string> = {
+    submitted: '已提交',
+    ai_scored: 'AI已评分',
+    manually_scored: '已手动评分',
+    ready_for_final: '待最终确定',
+    finalized: '已确定得分',
+    approved: '已审定',
+    published: '已公示',
+    distributed: '已分发'
   }
-  return labels[status] || status
+  return map[status] || status
 }
 
-// Format date
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+const getRoleLabel = (role: string): string => {
+  const map: Record<string, string> = {
+    evaluation_team: '考评小组',
+    evaluation_office: '考评办公室'
+  }
+  return map[role] || role
 }
 
-// Format date time
-const formatDateTime = (dateStr: string): string => {
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
+const formatDateTime = (str: string) => {
+  if (!str) return '-'
+  const d = new Date(str)
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
   })
 }
 </script>
@@ -428,38 +510,42 @@ const formatDateTime = (dateStr: string): string => {
 <style scoped>
 .publication-page {
   min-height: 100vh;
-  background-color: #f5f7fa;
-  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8edf5 100%);
+  padding: 24px;
 }
 
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
-.page-header .header-row {
+.header-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 8px;
 }
 
-.page-header .header-row h1 {
+.header-row h1 {
   margin: 0;
+  font-size: 26px;
+  color: #1a237e;
+  font-weight: 700;
 }
 
 .back-home-link {
   color: #409eff;
   text-decoration: none;
   font-size: 14px;
-}
-.back-home-link:hover {
-  text-decoration: underline;
+  padding: 4px 12px;
+  border: 1px solid #b3d8ff;
+  border-radius: 16px;
+  background: white;
+  transition: all 0.2s;
 }
 
-.page-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 28px;
-  color: #303133;
+.back-home-link:hover {
+  background: #409eff;
+  color: white;
 }
 
 .page-content {
@@ -470,15 +556,33 @@ const formatDateTime = (dateStr: string): string => {
   gap: 20px;
 }
 
-.selection-card,
-.history-card {
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+.toolbar-card {
+  border-radius: 12px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-left, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.main-card, .history-card {
+  border-radius: 12px;
 }
 
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
 }
 
 .card-header h2 {
@@ -487,79 +591,106 @@ const formatDateTime = (dateStr: string): string => {
   color: #303133;
 }
 
-.evaluation-table {
-  margin-top: 20px;
-}
-
-.final-score {
-  color: #f56c6c;
-  font-weight: bold;
-}
-
-.no-score {
+.card-subtitle {
+  font-size: 13px;
   color: #909399;
 }
 
-.selection-summary {
-  margin-top: 20px;
+.expand-content {
+  padding: 16px 24px;
+  background: #fafbfc;
+  border-radius: 8px;
 }
 
-.selected-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
+.expand-section {
+  margin-bottom: 8px;
 }
 
-.selected-item {
-  padding: 4px 12px;
-  background-color: #f0f9ff;
-  border: 1px solid #b3e19d;
-  border-radius: 4px;
-  color: #67c23a;
+.expand-title {
+  margin: 0 0 12px 0;
   font-size: 14px;
+  color: #606266;
+  font-weight: 600;
 }
 
-.history-card h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #303133;
+.score-highlight {
+  color: #e6a23c;
+  font-weight: bold;
+  font-size: 15px;
 }
 
-.history-item {
-  padding: 10px;
-}
-
-.history-header {
+.attachment-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.publication-id {
+.att-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.att-link:hover {
+  text-decoration: underline;
+}
+
+.att-date {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-left: auto;
+}
+
+.score-text {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.final-score {
+  color: #67c23a;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.no-data {
+  color: #c0c4cc;
+  font-size: 13px;
+}
+
+.history-card {
+  margin-top: 4px;
+}
+
+.history-item-card {
+  background: #fafafa;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-count {
+  font-size: 14px;
+  color: #606266;
+}
+
+.history-detail {
+  margin-top: 8px;
   font-size: 12px;
   color: #909399;
 }
 
-.history-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.sync-result {
+  padding: 4px;
 }
 
-.history-detail {
-  display: flex;
-  align-items: center;
-}
-
-.history-detail .label {
-  font-weight: 600;
-  color: #606266;
-  margin-right: 8px;
-}
-
-.history-detail .value {
-  color: #303133;
+/* 管理端面包屑 */
+.management-breadcrumb {
+  margin-top: 4px;
 }
 </style>

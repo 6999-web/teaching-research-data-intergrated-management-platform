@@ -172,7 +172,7 @@ export const presidentOfficeApi = {
 
 // API methods for publication
 export const publicationApi = {
-  // Publish results (initiate publication)
+  // Publish results (initiate publication + distribute at once)
   publish: (data: any) => {
     return apiClient.post('/publication/publish', data)
   },
@@ -187,14 +187,19 @@ export const publicationApi = {
     return apiClient.get(`/publication/publications/${publicationId}`)
   },
   
-  // Distribute results
+  // Distribute results (for old flow)
   distribute: (data: any) => {
     return apiClient.post('/publication/distribute', data)
   },
   
-  // Get evaluations ready for publication (approved by president office)
+  // Get evaluations ready for publication with scoring info and attachments
   getEvaluationsForPublication: (params?: { year?: number }) => {
     return apiClient.get('/publication/evaluations-for-publication', { params })
+  },
+  
+  // Sync all scored evaluations to president office
+  syncToPresident: () => {
+    return apiClient.post('/publication/sync-to-president')
   }
 }
 

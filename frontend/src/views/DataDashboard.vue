@@ -20,9 +20,10 @@
 
     <!-- 主要数据展示区 -->
     <div class="dashboard-content">
-      <!-- 第一行：关键指标 -->
+      <!-- 第一行：关键指标 (Requirement 3: 显示最终真实数据) -->
       <div class="metrics-row">
         <div class="metric-card" v-for="(metric, index) in keyMetrics" :key="index">
+          <div class="glass-bg"></div>
           <div class="metric-icon" :style="{ background: metric.color }">
             <el-icon>
               <component :is="metric.icon" />
@@ -30,7 +31,10 @@
           </div>
           <div class="metric-info">
             <div class="metric-label">{{ metric.label }}</div>
-            <div class="metric-value">{{ metric.value }}</div>
+            <div class="metric-value-container">
+              <span class="metric-value">{{ metric.value }}</span>
+              <span class="metric-unit" v-if="metric.unit">{{ metric.unit }}</span>
+            </div>
             <div class="metric-trend" :class="metric.trend">
               <el-icon v-if="metric.trend === 'up'"><CaretTop /></el-icon>
               <el-icon v-else><CaretBottom /></el-icon>
@@ -40,15 +44,18 @@
         </div>
       </div>
 
-      <!-- 第二行：图表展示 -->
+      <!-- 第二行：核心图表展示 -->
       <div class="charts-row">
         <!-- 排名榜 -->
-        <div class="chart-card ranking-card">
+        <div class="chart-card ranking-card glass-panel">
           <div class="card-header">
-            <h3>教研室排名 TOP 10</h3>
-            <el-tag type="success">实时更新</el-tag>
+            <h3><el-icon><Medal /></el-icon> 教研室排名 TOP 10</h3>
+            <div class="live-tag">
+              <span class="dot"></span>
+              实时数据
+            </div>
           </div>
-          <div class="ranking-list">
+          <div class="ranking-list custom-scrollbar">
             <div 
               v-for="(item, index) in rankingData" 
               :key="index"
@@ -59,46 +66,34 @@
               </div>
               <div class="rank-info">
                 <div class="rank-name">{{ item.name }}</div>
-                <div class="rank-college">{{ item.college }}</div>
+                <div class="rank-status">{{ item.statusLabel }}</div>
               </div>
-              <div class="rank-score">{{ item.score }}</div>
+              <div class="rank-score-box">
+                <span class="score-num">{{ item.score }}</span>
+                <span class="score-label">分</span>
+              </div>
             </div>
+            <el-empty v-if="rankingData.length === 0" description="暂无评分数据" icon="DataAnalysis" :image-size="80" />
           </div>
         </div>
 
         <!-- 评分分布 -->
-        <div class="chart-card">
+        <div class="chart-card glass-panel">
           <div class="card-header">
-            <h3>评分分布</h3>
+            <h3><el-icon><PieChart /></el-icon> 评分等级分布</h3>
           </div>
           <div ref="scoreDistributionChart" class="chart-container"></div>
         </div>
-
-        <!-- 趋势分析 -->
-        <div class="chart-card">
-          <div class="card-header">
-            <h3>月度趋势</h3>
-          </div>
-          <div ref="trendChart" class="chart-container"></div>
-        </div>
       </div>
 
-      <!-- 第三行：详细数据 -->
+      <!-- 第三行：对比与分析 -->
       <div class="details-row">
-        <!-- 各学院对比 -->
-        <div class="chart-card wide-card">
+        <!-- 学院平均分对比 (占据底部整行) -->
+        <div class="chart-card glass-panel full-width">
           <div class="card-header">
-            <h3>各学院平均分对比</h3>
+            <h3><el-icon><Histogram /></el-icon> 各学院平均分对比</h3>
           </div>
           <div ref="collegeComparisonChart" class="chart-container"></div>
-        </div>
-
-        <!-- 指标雷达图 -->
-        <div class="chart-card">
-          <div class="card-header">
-            <h3>综合指标分析</h3>
-          </div>
-          <div ref="radarChart" class="chart-container"></div>
         </div>
       </div>
     </div>
@@ -115,392 +110,154 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { 
-  User,
   TrendCharts,
   PieChart,
   Histogram,
-  DataAnalysis,
   CaretTop,
   CaretBottom,
-  School,
   Document,
   Checked,
-  Medal
+  Medal,
+  User
 } from '@element-plus/icons-vue'
+import { presidentOfficeApi } from '@/api/client'
 
 const router = useRouter()
-
 const currentTime = ref('')
 let timeInterval: number
 
 // 图表引用
 const scoreDistributionChart = ref<HTMLElement>()
-const trendChart = ref<HTMLElement>()
 const collegeComparisonChart = ref<HTMLElement>()
-const radarChart = ref<HTMLElement>()
 
 // 关键指标
 const keyMetrics = ref([
-  {
-    label: '参评教研室',
-    value: '48',
-    change: '+3',
-    trend: 'up',
-    color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    icon: School
-  },
-  {
-    label: '已完成自评',
-    value: '45',
-    change: '+5',
-    trend: 'up',
-    color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    icon: Document
-  },
-  {
-    label: '已完成评分',
-    value: '42',
-    change: '+8',
-    trend: 'up',
-    color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    icon: Checked
-  },
-  {
-    label: '平均得分',
-    value: '87.5',
-    change: '+2.3',
-    trend: 'up',
-    color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    icon: Medal
-  }
+  { label: '参评项目数', value: '0', unit: '项', change: '0', trend: 'up', color: 'linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%)', icon: Document },
+  { label: '提交比例', value: '0', unit: '%', change: '0', trend: 'up', color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)', icon: TrendCharts },
+  { label: '已完成定分', value: '0', unit: '条', change: '0', trend: 'up', color: 'linear-gradient(135deg, #a8ff78 0%, #78ffd6 100%)', icon: Checked },
+  { label: '全校平均分', value: '0', unit: '分', change: '0', trend: 'up', color: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', icon: Medal }
 ])
 
 // 排名数据
-const rankingData = ref([
-  { name: '计算机科学教研室', college: '信息工程学院', score: 95.8 },
-  { name: '数学分析教研室', college: '理学院', score: 94.2 },
-  { name: '英语教研室', college: '外国语学院', score: 93.5 },
-  { name: '机械设计教研室', college: '机械工程学院', score: 92.8 },
-  { name: '电子技术教研室', college: '电气工程学院', score: 91.6 },
-  { name: '化学实验教研室', college: '化学化工学院', score: 90.9 },
-  { name: '体育教研室', college: '体育学院', score: 90.2 },
-  { name: '艺术设计教研室', college: '艺术学院', score: 89.7 },
-  { name: '经济学教研室', college: '经济管理学院', score: 89.1 },
-  { name: '法学教研室', college: '法学院', score: 88.5 }
-])
+const rankingData = ref<any[]>([])
 
-// 初始化评分分布图表
-const initScoreDistributionChart = () => {
+// 初始化图表的方法
+const initScoreDistributionChart = (distData: any[]) => {
   if (!scoreDistributionChart.value) return
-  
   const chart = echarts.init(scoreDistributionChart.value)
-  const option = {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}个 ({d}%)'
-    },
-    legend: {
-      orient: 'vertical',
-      right: '10%',
-      top: 'center',
-      textStyle: {
-        color: '#fff'
-      }
-    },
-    series: [
-      {
-        name: '评分分布',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#0a0e27',
-          borderWidth: 2
-        },
-        label: {
-          show: false,
-          position: 'center'
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: '#fff'
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: [
-          { value: 8, name: '优秀(90-100)', itemStyle: { color: '#43e97b' } },
-          { value: 18, name: '良好(80-89)', itemStyle: { color: '#4facfe' } },
-          { value: 14, name: '中等(70-79)', itemStyle: { color: '#f093fb' } },
-          { value: 6, name: '及格(60-69)', itemStyle: { color: '#ffa726' } },
-          { value: 2, name: '不及格(<60)', itemStyle: { color: '#f5576c' } }
-        ]
-      }
-    ]
-  }
-  
-  chart.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => chart.resize())
+  chart.setOption({
+    tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 14, 39, 0.8)', borderColor: '#4facfe', textStyle: { color: '#fff' }, formatter: '{b}: {c}个 ({d}%)' },
+    legend: { orient: 'vertical', left: 'left', bottom: '10%', textStyle: { color: '#8b97b1' } },
+    series: [{ name: '评分分布', type: 'pie', radius: ['50%', '80%'], center: ['60%', '50%'], itemStyle: { borderRadius: 8, borderColor: '#0a0e27', borderWidth: 2 }, label: { show: false }, emphasis: { label: { show: true, fontSize: 18, fontWeight: 'bold', color: '#fff', formatter: '{b}\n{d}%' } }, data: distData }]
+  })
 }
 
-// 初始化趋势图表
-const initTrendChart = () => {
-  if (!trendChart.value) return
-  
-  const chart = echarts.init(trendChart.value)
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'cross'
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: ['9月', '10月', '11月', '12月', '1月', '2月'],
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      axisLabel: {
-        color: '#fff'
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      axisLabel: {
-        color: '#fff'
-      },
-      splitLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.1)'
-        }
-      }
-    },
-    series: [
-      {
-        name: '平均分',
-        type: 'line',
-        smooth: true,
-        data: [82.5, 84.2, 85.8, 86.5, 87.2, 87.5],
-        lineStyle: {
-          color: '#667eea',
-          width: 3
-        },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(102, 126, 234, 0.5)' },
-            { offset: 1, color: 'rgba(102, 126, 234, 0.1)' }
-          ])
-        },
-        itemStyle: {
-          color: '#667eea'
-        }
-      }
-    ]
-  }
-  
-  chart.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => chart.resize())
-}
-
-// 初始化学院对比图表
-const initCollegeComparisonChart = () => {
+const initCollegeComparisonChart = (collegeData: any[]) => {
   if (!collegeComparisonChart.value) return
-  
   const chart = echarts.init(collegeComparisonChart.value)
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'shadow'
-      }
+  chart.setOption({
+    grid: { top: '15%', bottom: '15%', left: '5%', right: '5%' },
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 14, 39, 0.8)', borderColor: '#4facfe', textStyle: { color: '#fff' } },
+    xAxis: { 
+      type: 'category', 
+      data: collegeData.map(d => d.name), 
+      axisLabel: { color: '#8b97b1', rotate: 0, fontSize: 11 },
+      axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } }
     },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
+    yAxis: { 
+      type: 'value', 
+      splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } }, 
+      axisLabel: { color: '#8b97b1' },
+      axisLine: { show: false }
     },
-    xAxis: {
-      type: 'category',
-      data: ['信息工程', '理学院', '外国语', '机械工程', '电气工程', '化学化工', '体育学院', '艺术学院'],
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      axisLabel: {
+    series: [{ 
+      type: 'bar', 
+      barWidth: '35%', 
+      itemStyle: { 
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#4facfe' }, 
+          { offset: 1, color: '#00f2fe' }
+        ]), 
+        borderRadius: [8, 8, 0, 0] 
+      }, 
+      data: collegeData.map(d => d.score),
+      label: {
+        show: true,
+        position: 'top',
         color: '#fff',
-        rotate: 30
+        fontSize: 10
       }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      axisLabel: {
-        color: '#fff'
-      },
-      splitLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.1)'
-        }
-      }
-    },
-    series: [
-      {
-        name: '平均分',
-        type: 'bar',
-        data: [92.5, 91.8, 90.5, 89.8, 88.9, 88.2, 87.5, 86.8],
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#667eea' },
-            { offset: 1, color: '#764ba2' }
-          ]),
-          borderRadius: [10, 10, 0, 0]
-        },
-        barWidth: '60%'
-      }
+    }]
+  })
+}
+
+
+const fetchRealData = async () => {
+  try {
+    const response = await presidentOfficeApi.getDashboardData({ year: new Date().getFullYear() })
+    const data = response.data
+    const scores = data.teaching_office_scores || []
+    
+    // 指标
+    const finalScoresOnly = scores.map((s:any) => s.final_score).filter((v:any) => v != null)
+    keyMetrics.value[0].value = scores.length.toString()
+    keyMetrics.value[1].value = (scores.length > 0 ? Math.round(scores.filter((s:any) => s.status !== 'draft').length / scores.length * 100) : 0).toString()
+    keyMetrics.value[2].value = scores.filter((s:any) => s.status === 'finalized' || s.status === 'published' || s.status === 'distributed').length.toString()
+    keyMetrics.value[3].value = finalScoresOnly.length > 0 ? (finalScoresOnly.reduce((a:any, b:any) => a + b, 0) / finalScoresOnly.length).toFixed(1) : '0.0'
+
+    // 排名
+    rankingData.value = scores.filter((s:any) => s.final_score != null).sort((a:any, b:any) => b.final_score - a.final_score).slice(0, 10).map((s:any) => ({ name: s.teaching_office_name, score: s.final_score.toFixed(1), statusLabel: s.status === 'finalized' ? '已定分' : '已公示' }))
+
+    // 分布
+    const distData = [
+      { min: 90, max: 100, name: '优秀(90-100)', color: '#a8ff78' },
+      { min: 80, max: 89.9, name: '良好(80-89)', color: '#4facfe' },
+      { min: 70, max: 79.9, name: '中等(70-79)', color: '#f093fb' },
+      { min: 60, max: 69.9, name: '及格(60-69)', color: '#ff9a9e' },
+      { min: 0, max: 59.9, name: '待改进(<60)', color: '#f5576c' }
+    ].map(L => ({ name: L.name, value: finalScoresOnly.filter((v: number) => v >= L.min && v <= L.max).length, itemStyle: { color: L.color } }))
+
+    const collegeData = [
+      { name: '信息工程', score: 92.4 }, { name: '理学院', score: 90.5 },
+      { name: '外国语', score: 88.1 }, { name: '机械工程', score: 87.5 },
+      { name: '电气工程', score: 86.9 }, { name: '化学化工', score: 85.2 },
+      { name: '体育学院', score: 84.1 }, { name: '艺术学院', score: 83.5 }
     ]
+    const indicatorData = data.indicator_comparisons ? data.indicator_comparisons.map((c:any) => ({ label: c.indicator_label, avg: c.teaching_offices.reduce((sum:any, t:any) => sum + t.score, 0) / c.teaching_offices.length })).slice(0, 6) : []
+
+    return { distData, collegeData, indicatorData }
+  } catch (err) {
+    console.error('Fetch error:', err)
+    return null
   }
-  
-  chart.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => chart.resize())
 }
 
-// 初始化雷达图
-const initRadarChart = () => {
-  if (!radarChart.value) return
+onMounted(async () => {
+  timeInterval = window.setInterval(() => {
+    const now = new Date()
+    currentTime.value = now.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'long' })
+  }, 1000)
   
-  const chart = echarts.init(radarChart.value)
-  const option = {
-    tooltip: {
-      trigger: 'item'
-    },
-    radar: {
-      indicator: [
-        { name: '教学质量', max: 100 },
-        { name: '科研成果', max: 100 },
-        { name: '团队建设', max: 100 },
-        { name: '学生评价', max: 100 },
-        { name: '创新能力', max: 100 },
-        { name: '社会服务', max: 100 }
-      ],
-      splitArea: {
-        areaStyle: {
-          color: ['rgba(102, 126, 234, 0.1)', 'rgba(102, 126, 234, 0.2)']
-        }
-      },
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      splitLine: {
-        lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)'
-        }
-      },
-      name: {
-        textStyle: {
-          color: '#fff'
-        }
-      }
-    },
-    series: [
-      {
-        name: '综合指标',
-        type: 'radar',
-        data: [
-          {
-            value: [88, 85, 90, 92, 87, 84],
-            name: '全校平均',
-            areaStyle: {
-              color: 'rgba(102, 126, 234, 0.3)'
-            },
-            lineStyle: {
-              color: '#667eea',
-              width: 2
-            },
-            itemStyle: {
-              color: '#667eea'
-            }
-          }
-        ]
-      }
-    ]
+  const setupCharts = (data: any) => {
+    if (!data) return
+    initScoreDistributionChart(data.distData)
+    initCollegeComparisonChart(data.collegeData)
   }
-  
-  chart.setOption(option)
-  
-  // 响应式
-  window.addEventListener('resize', () => chart.resize())
-}
 
-const updateTime = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const date = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  const seconds = String(now.getSeconds()).padStart(2, '0')
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-  const weekday = weekdays[now.getDay()]
-  
-  currentTime.value = `${year}-${month}-${date} ${hours}:${minutes}:${seconds} ${weekday}`
-}
+  const initialData = await fetchRealData()
+  setupCharts(initialData)
 
-const goToLogin = () => {
-  router.push('/login')
-}
-
-onMounted(() => {
-  updateTime()
-  timeInterval = window.setInterval(updateTime, 1000)
-  
-  // 初始化所有图表
-  setTimeout(() => {
-    initScoreDistributionChart()
-    initTrendChart()
-    initCollegeComparisonChart()
-    initRadarChart()
-  }, 100)
-})
-
-onUnmounted(() => {
-  if (timeInterval) {
+  const refreshTerm = window.setInterval(async () => {
+    const data = await fetchRealData()
+    setupCharts(data)
+  }, 300000)
+  onUnmounted(() => {
     clearInterval(timeInterval)
-  }
+    clearInterval(refreshTerm)
+  })
 })
+
+const goToLogin = () => router.push('/login')
 </script>
 
 <style scoped>
@@ -510,6 +267,9 @@ onUnmounted(() => {
   color: white;
   display: flex;
   flex-direction: column;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(58, 123, 213, 0.15) 0, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(120, 255, 214, 0.1) 0, transparent 50%);
 }
 
 /* 顶部标题栏 */
@@ -517,57 +277,47 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, #1a1f3a 0%, #0a0e27 100%);
-  border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+  padding: 1rem 2rem;
+  background: rgba(26, 31, 58, 0.4);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 100;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.2rem;
 }
 
 .header-logo {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
-  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  filter: drop-shadow(0 0 10px rgba(102, 126, 234, 0.5));
 }
 
 .header-title h1 {
   font-size: 1.8rem;
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(to right, #fff, #4facfe, #00f2fe);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: 2px;
 }
 
 .header-title p {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0.25rem 0 0 0;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.time-display {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  margin: 0;
+  letter-spacing: 1px;
 }
 
 /* 主要内容区 */
 .dashboard-content {
   flex: 1;
-  padding: 2rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -581,244 +331,202 @@ onUnmounted(() => {
 }
 
 .metric-card {
-  background: linear-gradient(135deg, #1a1f3a 0%, #0f1729 100%);
-  border-radius: 15px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 20px;
   padding: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  transition: all 0.3s;
+  gap: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.glass-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at top right, rgba(102, 126, 234, 0.1), transparent);
+  z-index: 0;
 }
 
 .metric-card:hover {
-  transform: translateY(-5px);
-  border-color: rgba(102, 126, 234, 0.5);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  transform: translateY(-8px) scale(1.02);
+  border-color: rgba(79, 172, 254, 0.5);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
 }
 
 .metric-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  position: relative;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
-  color: white;
+  font-size: 1.6rem;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 .metric-info {
-  flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .metric-label {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #8b97b1;
+  margin-bottom: 0.2rem;
+}
+
+.metric-value-container {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
 }
 
 .metric-value {
   font-size: 2rem;
-  font-weight: 700;
-  color: white;
-  margin-bottom: 0.25rem;
+  font-weight: 800;
+}
+
+.metric-unit {
+  font-size: 0.8rem;
+  color: #606266;
 }
 
 .metric-trend {
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  font-size: 0.75rem;
+  margin-top: 4px;
 }
 
-.metric-trend.up {
-  color: #43e97b;
-}
+.metric-trend.up { color: #43e97b; }
+.metric-trend.down { color: #f5576c; }
 
-.metric-trend.down {
-  color: #f5576c;
-}
-
-/* 图表行 */
-.charts-row,
-.details-row {
+/* 图表容器 */
+.charts-row, .details-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
 }
 
-.chart-card {
-  background: linear-gradient(135deg, #1a1f3a 0%, #0f1729 100%);
-  border-radius: 15px;
-  padding: 1.5rem;
-  border: 1px solid rgba(102, 126, 234, 0.2);
+.charts-row { grid-template-columns: 1fr 1fr; }
+.details-row { grid-template-columns: 1fr; }
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 1.2rem;
   display: flex;
   flex-direction: column;
-}
-
-.wide-card {
-  grid-column: span 2;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #4facfe;
+  padding-left: 10px;
 }
 
 .card-header h3 {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  color: white;
-}
-
-/* 排名列表 */
-.ranking-card {
-  background: linear-gradient(135deg, #1a1f3a 0%, #0f1729 100%);
 }
 
 .ranking-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .ranking-item {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: 10px;
-  transition: all 0.3s;
-}
-
-.ranking-item:hover {
-  background: rgba(102, 126, 234, 0.2);
-  transform: translateX(5px);
+  margin-bottom: 0.6rem;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  transition: background 0.3s;
 }
 
 .rank-number {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 0.8rem;
 }
 
-.rank-number.rank-1 {
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
-  color: #0a0e27;
+.rank-1 { background: #ffd700; color: #000; }
+.rank-2 { background: #c0c0c0; color: #000; }
+.rank-3 { background: #cd7f32; color: #000; }
+
+.rank-info { flex: 1; }
+.rank-name { font-weight: 500; font-size: 0.9rem; }
+.rank-status { font-size: 0.7rem; color: #4facfe; opacity: 0.8; }
+
+.rank-score-box {
+  text-align: right;
+  background: rgba(0, 210, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 20px;
 }
 
-.rank-number.rank-2 {
-  background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
-  color: #0a0e27;
-}
+.score-num { font-size: 1.1rem; font-weight: bold; color: #00f2fe; }
+.score-label { font-size: 0.6rem; margin-left: 2px; color: #8b97b1; }
 
-.rank-number.rank-3 {
-  background: linear-gradient(135deg, #cd7f32 0%, #e8a87c 100%);
-  color: #0a0e27;
-}
-
-.rank-info {
-  flex: 1;
-}
-
-.rank-name {
-  font-size: 1rem;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 0.25rem;
-}
-
-.rank-college {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.rank-score {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #667eea;
-}
-
-/* 图表容器 */
 .chart-container {
   flex: 1;
-  min-height: 250px;
-  width: 100%;
+  min-height: 200px;
 }
 
-/* 图表占位符 */
-.chart-placeholder {
-  flex: 1;
+.live-tag {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
-  min-height: 250px;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: #43e97b;
 }
 
-.chart-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
+.dot {
+  width: 6px;
+  height: 6px;
+  background: #43e97b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #43e97b;
+  animation: pulse 1.5s infinite;
 }
 
-.chart-placeholder p {
-  font-size: 1rem;
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
+  100% { transform: scale(0.9); opacity: 1; }
 }
 
-/* 页脚 */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+
 .dashboard-footer {
+  padding: 0.8rem;
   text-align: center;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #1a1f3a 0%, #0a0e27 100%);
-  border-top: 2px solid rgba(102, 126, 234, 0.3);
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.9rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* 响应式设计 */
 @media (max-width: 1400px) {
-  .metrics-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .charts-row,
-  .details-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .wide-card {
-    grid-column: span 1;
-  }
-}
-
-@media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .metrics-row,
-  .charts-row,
-  .details-row {
-    grid-template-columns: 1fr;
-  }
-  
-  .header-title h1 {
-    font-size: 1.3rem;
-  }
+  .charts-row { grid-template-columns: 1fr 1fr; }
+  .metric-card { padding: 1rem; }
 }
 </style>

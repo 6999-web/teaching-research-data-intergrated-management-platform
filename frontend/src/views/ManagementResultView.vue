@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="header-row">
         <h1>考评结果汇总</h1>
-        <router-link to="/management-home" class="back-home-link">← 返回评教小组端首页</router-link>
+        <a href="#" @click.prevent="goBackToHome" class="back-home-link">← 返回主页</a>
       </div>
       <el-breadcrumb class="management-breadcrumb" separator="/">
         <el-breadcrumb-item :to="{ path: '/management-home' }">首页</el-breadcrumb-item>
@@ -564,6 +564,15 @@ const loadResults = async () => {
     results.value = []
   } finally {
     loading.value = false
+  }
+}
+
+const goBackToHome = () => {
+  const mode = localStorage.getItem('viewMode')
+  if (mode === 'role') {
+    router.push('/home')
+  } else {
+    router.push('/management-home')
   }
 }
 

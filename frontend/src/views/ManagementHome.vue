@@ -102,19 +102,15 @@ import {
   User,
   Monitor,
   Medal,
-  Warning,
   Promotion,
   Connection,
   DataAnalysis,
   TrendCharts,
-  CircleCheck,
   ArrowRight,
   Document,
   Checked,
   FolderOpened,
-  View,
-  SwitchButton,
-  Setting
+  SwitchButton
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -145,11 +141,9 @@ const menuItems = computed(() => {
       { name: '数据同步', icon: Connection }
     ]
   } else if (role === 'president_office') {
-    // 校长办公会：数据看板、最终结果查看功能
+    // 校长办公会：仅保留实时数据监控
     return [
-      { name: '数据看板', icon: Monitor },
-      { name: '最终结果', icon: TrendCharts },
-      { name: '审批中心', icon: CircleCheck }
+      { name: '实时监控', icon: Monitor }
     ]
   }
   
@@ -175,12 +169,11 @@ const tabsConfig = computed(() => {
       ]
     ]
   } else if (role === 'evaluation_office') {
-    // 评教小组办公室：发起公示 + 公示状态 + 将结果传递到校长办公室端
+    // 评教小组办公室：发起公示 + 将结果传递到校长办公室端
     return [
-      // 公示管理（发起公示 -> 教研室端结果查看；公示状态）
+      // 公示管理（仅发起公示）
       [
-        { name: '发起公示', icon: Promotion, description: '将最终成绩公示，并发送到教研室端结果查看', routeOverride: '/publication' } as any,
-        { name: '公示状态', icon: View, description: '查看各教研室公示进度和状态', routeOverride: '/publication' } as any
+        { name: '发起公示', icon: Promotion, description: '将最终成绩公示，并发送到教研室端结果查看', routeOverride: '/publication' } as any
       ],
       // 数据同步（将结果传递到校长办公室端）
       [
@@ -189,20 +182,9 @@ const tabsConfig = computed(() => {
     ]
   } else if (role === 'president_office') {
     return [
-      // 数据看板
+      // 实时监控
       [
-        { name: '实时监控', icon: Monitor, description: '查看实时数据和排名对比' },
-        { name: '数据分析', icon: DataAnalysis, description: '深度数据分析和趋势预测' }
-      ],
-      // 最终结果
-      [
-        { name: '考评结果', icon: TrendCharts, description: '查看评教的最终结果' },
-        { name: '历史数据', icon: Document, description: '查看历年考评数据' }
-      ],
-      // 审批中心
-      [
-        { name: '结果审定', icon: CircleCheck, description: '审定考评结果' },
-        { name: '公示审批', icon: Promotion, description: '决定是否公示结果' }
+        { name: '实时监控', icon: Monitor, description: '查看评教流程各个环节的实时状态与结果统计' }
       ]
     ]
   }
@@ -241,13 +223,12 @@ const functionsConfig = computed(() => {
       ]
     ]
   } else if (role === 'evaluation_office') {
-    // 评教小组办公室：仅保留“发起公示 / 公示状态 / 同步到校长办公会”
+    // 评教小组办公室：仅保留“发起公示 / 同步到校长办公会”
     return [
       // 公示管理
       [
         [
-          { name: '发起公示', description: '将最终成绩公示，并发送到教研室端结果查看', icon: Promotion, route: '/publication' },
-          { name: '公示状态', description: '查看各教研室公示进度和状态', icon: View, route: '/publication' }
+          { name: '发起公示', description: '将最终成绩公示，并发送到教研室端结果查看', icon: Promotion, route: '/publication' }
         ]
       ],
       // 数据同步
@@ -259,39 +240,10 @@ const functionsConfig = computed(() => {
     ]
   } else if (role === 'president_office') {
     return [
-      // 数据看板
+      // 实时监控（唯一菜单）
       [
         [
-          { name: '实时监控', description: '查看实时数据和排名对比', icon: Monitor, route: '/president-office-dashboard' },
-          { name: '全校概览', description: '查看全校考评进度和数据', icon: DataAnalysis, route: '/president-office-dashboard' },
-          { name: 'AI评分监控', description: '监控AI评分执行情况', icon: TrendCharts, route: '#' }
-        ],
-        [
-          { name: '数据分析', description: '深度数据分析和趋势预测', icon: TrendCharts, route: '#' },
-          { name: '对比分析', description: '对比不同教研室的表现', icon: DataAnalysis, route: '#' }
-        ]
-      ],
-      // 最终结果
-      [
-        [
-          { name: '考评结果', description: '查看评教的最终结果', icon: TrendCharts, route: '/management-results' },
-          { name: '排名榜单', description: '查看教研室排名', icon: Medal, route: '/president-office-dashboard' },
-          { name: '结果导出', description: '导出考评结果报告', icon: Document, route: '#' }
-        ],
-        [
-          { name: '历史数据', description: '查看历年考评数据', icon: Document, route: '#' },
-          { name: '趋势分析', description: '分析历年数据趋势', icon: TrendCharts, route: '#' }
-        ]
-      ],
-      // 审批中心
-      [
-        [
-          { name: '结果审定', description: '审定考评结果', icon: CircleCheck, route: '#' },
-          { name: '待审批项', description: '查看待审批的项目', icon: Warning, route: '#' }
-        ],
-        [
-          { name: '公示审批', description: '决定是否公示结果', icon: Promotion, route: '/publication' },
-          { name: '审批记录', description: '查看审批历史记录', icon: Document, route: '#' }
+          { name: '实时监控', description: '监控评教的各个流程进度，包含AI评分分析与最终审定发文', icon: Monitor, route: '/president-office-dashboard' }
         ]
       ]
     ]
@@ -314,9 +266,7 @@ const selectMenu = (index: number) => {
 }
 
 const goToHome = () => {
-  activeMenu.value = 0
-  activeTab.value = 0
-  router.push('/management-home').catch(() => {})
+  router.push('/')
 }
 
 const navigateTo = (route: string) => {
@@ -334,7 +284,7 @@ const handleLogout = () => {
     type: 'warning'
   }).then(() => {
     authStore.logout()
-    router.push('/login')
+    router.push('/')
   })
 }
 </script>
